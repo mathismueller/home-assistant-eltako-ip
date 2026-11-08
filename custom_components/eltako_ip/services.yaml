@@ -1,10 +1,51 @@
+identify_device:
+  name: Identify Device
+  description: Flashes the physical LED on the Eltako IP actuator/gateway to visually locate it in the cabinet.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: Optional config entry ID when multiple Eltako IP gateways are configured.
+      required: false
+      selector:
+        text:
+
+rename_device:
+  name: Rename Device
+  description: Updates the display name on the Eltako unit and synchronizes the name in the Home Assistant Device Registry.
+  fields:
+    device_guid:
+      name: Device GUID
+      description: Logical device GUID to rename. Leave empty to rename the gateway system itself.
+      required: false
+      example: "3889bfbc-3efc-4d37-ac76-ac89e781c21f"
+      selector:
+        text:
+    display_name:
+      name: Display Name
+      description: New human-readable name for the device.
+      required: true
+      example: "Living Room Window"
+      selector:
+        text:
+
 start_enocean_scan:
   name: Start EnOcean Pairing Scan
   description: Puts the EnOcean transceiver into teach-in mode to discover new sensors or switches.
+  fields:
+    duration:
+      name: Scan Duration (seconds)
+      description: How long the EnOcean transceiver stays in teach-in mode.
+      required: false
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 300
+          mode: box
 
 pair_enocean_device:
   name: Pair EnOcean Device
-  description: Registers a discovered EnOcean radio ID and binds it to a product profile.
+  description: Registers a discovered EnOcean radio ID (EURID) and binds it to a product profile.
   fields:
     eur_id:
       name: EnOcean Radio ID (EURID)
@@ -23,6 +64,92 @@ pair_enocean_device:
       example: "791a7c28-22e3-4fab-8ecc-0084e15396c5"
       selector:
         text:
+    display_name:
+      name: Display Name
+      description: Optional human-readable name to assign immediately after pairing.
+      required: false
+      example: "Kitchen Window"
+      selector:
+        text:
+
+unpair_enocean_device:
+  name: Unpair EnOcean Device
+  description: Removes a paired EnOcean sensor/actuator from the gateway and cleans up its Device Registry entry.
+  fields:
+    service_device_guid:
+      name: EnOcean Service Device GUID
+      description: The EnOcean serviceDeviceGuid to delete.
+      required: false
+      example: "44444444-4444-4444-4444-444444444444"
+      selector:
+        text:
+    device_guid:
+      name: Logical Device GUID
+      description: Alternatively, provide the logical deviceGuid of the paired EnOcean device.
+      required: false
+      example: "33333333-3333-3333-3333-333333333333"
+      selector:
+        text:
+
+legacy_pair_enocean_device:
+  name: Bidirectional Legacy EnOcean Pairing
+  description: Starts or continues bidirectional EnOcean actuator teach-in (FSR61, FUD61, FSB61, FHK14).
+  fields:
+    step:
+      name: Wizard Step
+      description: Whether to start sending the teach-in telegram or continue/confirm pairing.
+      required: false
+      default: "start"
+      selector:
+        select:
+          options:
+            - "start"
+            - "continue"
+    product_guid:
+      name: Product GUID
+      description: Product GUID of the target EnOcean actuator (e.g. FSR61 = 7358f66f-5d44-4781-a4eb-bd6857e8e39e).
+      required: false
+      example: "7358f66f-5d44-4781-a4eb-bd6857e8e39e"
+      selector:
+        text:
+
+set_enocean_device_config:
+  name: Configure Paired EnOcean Device
+  description: Updates physical orientation or bridge direction on a paired EnOcean device.
+  fields:
+    device_guid:
+      name: Device GUID
+      description: Logical device GUID of the paired EnOcean device.
+      required: false
+      selector:
+        text:
+    service_device_guid:
+      name: Service Device GUID
+      description: EnOcean serviceDeviceGuid (optional if device_guid is provided).
+      required: false
+      selector:
+        text:
+    orientation:
+      name: Orientation
+      description: Mounting orientation (auto, clockwise0, clockwise90, clockwise180, clockwise270).
+      required: false
+      selector:
+        select:
+          options:
+            - "auto"
+            - "clockwise0"
+            - "clockwise90"
+            - "clockwise180"
+            - "clockwise270"
+    bridge_direction:
+      name: Bridge Direction
+      description: EnOcean telegram direction (unidirectional or bidirectional).
+      required: false
+      selector:
+        select:
+          options:
+            - "unidirectional"
+            - "bidirectional"
 
 expose_matter_device:
   name: Expose Device to Matter Bridge
@@ -52,5 +179,146 @@ remove_matter_device:
       description: The GUID of the bridged Matter service device to remove.
       required: true
       example: "7bbc0af3-423b-4c61-b269-ab90abc6135a"
+      selector:
+        text:
+
+reset_matter_bridge:
+  name: Reset Matter Bridge
+  description: Clears all bridged endpoints on the Eltako Matter service.
+
+create_automation:
+  name: Create On-Device Automation
+  description: Creates an autonomous hardware-level automation rule on the Eltako device (executes even if Wi-Fi/HA is offline).
+  fields:
+    input_device_guid:
+      name: Input Device GUID
+      description: GUID of the input trigger device (e.g. wired input or EnOcean sensor/rocker).
+      required: true
+      example: "60f693b9-d58d-4a89-895f-6fbc119d5565"
+      selector:
+        text:
+    input_characteristic:
+      name: Input Characteristic
+      description: Trigger characteristic identifier (e.g. input, inputChannel1, contact).
+      required: false
+      default: "input"
+      selector:
+        text:
+    output_device_guid:
+      name: Output Device GUID
+      description: GUID of the target actuator device (e.g. relay, dimmer, cover).
+      required: true
+      example: "3889bfbc-3efc-4d37-ac76-ac89e781c21f"
+      selector:
+        text:
+    output_characteristic:
+      name: Output Characteristic
+      description: Target characteristic identifier (e.g. relay, targetBrightness, targetPosition).
+      required: false
+      default: "relay"
+      selector:
+        text:
+    logic:
+      name: Automation Logic
+      description: Switching logic mode (buttonImpulseSwitch, buttonSwitch, buttonNormallyOpened, buttonNormallyClosed, universalButtonDimmer).
+      required: false
+      default: "buttonImpulseSwitch"
+      selector:
+        select:
+          options:
+            - "buttonImpulseSwitch"
+            - "buttonSwitch"
+            - "buttonNormallyOpened"
+            - "buttonNormallyClosed"
+            - "buttonTargetValue"
+            - "universalButtonDimmer"
+    off_timer_seconds:
+      name: Off-Timer (seconds)
+      description: Optional staircase / auto-off timer in seconds (0 to disable).
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 36000
+          mode: box
+    active:
+      name: Active
+      description: Whether the rule is enabled immediately.
+      required: false
+      default: true
+      selector:
+        boolean:
+
+update_automation:
+  name: Update On-Device Automation
+  description: Updates logic, off-timer, or active state of an existing on-device automation rule.
+  fields:
+    automation_guid:
+      name: Automation GUID
+      description: The automationGuid of the rule to update.
+      required: true
+      selector:
+        text:
+    logic:
+      name: Automation Logic
+      description: Switching logic mode (e.g. buttonImpulseSwitch or buttonSwitch).
+      required: false
+      selector:
+        select:
+          options:
+            - "buttonImpulseSwitch"
+            - "buttonSwitch"
+            - "buttonNormallyOpened"
+            - "buttonNormallyClosed"
+            - "buttonTargetValue"
+            - "universalButtonDimmer"
+    off_timer_seconds:
+      name: Off-Timer (seconds)
+      description: Auto-off timer in seconds (0 to disable).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 36000
+          mode: box
+    active:
+      name: Active
+      description: Enable or disable the automation rule.
+      required: false
+      selector:
+        boolean:
+
+delete_automation:
+  name: Delete On-Device Automation
+  description: Deletes an on-device automation rule by its automationGuid.
+  fields:
+    automation_guid:
+      name: Automation GUID
+      description: The automationGuid of the rule to delete.
+      required: true
+      selector:
+        text:
+
+reset_automations:
+  name: Reset On-Device Automations
+  description: Resets all on-device automations on the Eltako gateway to factory defaults.
+
+upload_firmware:
+  name: Upload Local Firmware Image
+  description: Uploads an offline firmware binary (.bin) directly to the Eltako device over HTTPS.
+  fields:
+    file_path:
+      name: Firmware Binary Path
+      description: Local path on the Home Assistant host to the signed Eltako .bin firmware image.
+      required: true
+      example: "/config/firmware/esr64pf_2.6.0.bin"
+      selector:
+        text:
+    desired_version:
+      name: Desired Version
+      description: Optional version string to stage before uploading the binary.
+      required: false
+      example: "2.6.0"
       selector:
         text:

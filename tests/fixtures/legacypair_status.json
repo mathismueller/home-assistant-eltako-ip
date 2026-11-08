@@ -1,0 +1,8 @@
+{
+  "status": "confirmationMissing",
+  "description": "Legacy pair not started",
+  "teachIn": false,
+  "taughtIn": false,
+  "remotePeerEurId": null,
+  "deviceSenderId": null
+}

@@ -1,7 +1,7 @@
 """Pytest configuration and custom fixtures."""
 
 import os
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
@@ -30,6 +30,8 @@ TEST_HOST = "192.0.2.1"
 TEST_PORT = 443
 TEST_POP = "test_proof_of_possession"
 TEST_BASE_URL = f"https://{TEST_HOST}:{TEST_PORT}/api/v0"
+
+_CACHED_LIVE_API_KEY: Optional[str] = None
 
 
 @pytest.fixture
@@ -87,7 +89,11 @@ def pytest_collection_modifyitems(
 
 @pytest_asyncio.fixture
 async def live_client() -> AsyncGenerator[EltakoClient, None]:
-    """Provides an authenticated client connected to real hardware defined in .env."""
+    """Provides an authenticated client connected to real hardware defined in .env.
+
+    Reuses a session-cached API key to avoid churning the 10-slot API key ring buffer.
+    """
+    global _CACHED_LIVE_API_KEY
     load_dotenv()
     host = os.getenv("ELTAKO_HOST")
     pop = os.getenv("ELTAKO_POP")
@@ -96,7 +102,8 @@ async def live_client() -> AsyncGenerator[EltakoClient, None]:
     if not host or not pop:
         pytest.skip(".env file missing ELTAKO_HOST or ELTAKO_POP for live hardware testing")
 
-    client = EltakoClient(host=host, pop=pop, port=port)
-    await client.login()
+    client = EltakoClient(host=host, pop=pop, port=port, api_key=_CACHED_LIVE_API_KEY)
+    if not _CACHED_LIVE_API_KEY:
+        _CACHED_LIVE_API_KEY = await client.login()
     yield client
     await client.close()

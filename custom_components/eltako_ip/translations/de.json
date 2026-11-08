@@ -18,6 +18,13 @@
           "port": "Port",
           "pop": "Proof of Possession (PoP)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Eltako Baureihe 62/64 IP neu authentifizieren",
+        "description": "Geben Sie den aktualisierten Proof-of-Possession (PoP) Code für Ihr Eltako-Gateway ein.",
+        "data": {
+          "pop": "Proof of Possession (PoP)"
+        }
       }
     },
     "error": {
@@ -28,6 +35,7 @@
     "abort": {
       "already_configured": "Gerät ist in Home Assistant bereits konfiguriert.",
       "reconfigure_successful": "Gerät wurde erfolgreich neu konfiguriert.",
+      "reauth_successful": "Authentifizierung erfolgreich aktualisiert.",
       "another_device": "Der angegebene Host gehört zu einem anderen Eltako-Gerät (abweichende Seriennummer)."
     }
   },
@@ -35,11 +43,36 @@
     "step": {
       "init": {
         "title": "Eltako Gateway Optionen",
+        "description": "Konfigurieren Sie das Abfrageintervall, die EnOcean Repeater-Stufe oder starten Sie den interaktiven EnOcean-Einlernassistenten.",
         "data": {
           "scan_interval": "Abfrageintervall (Sekunden)",
-          "repeater_level": "EnOcean Repeater-Stufe"
+          "repeater_level": "EnOcean Repeater-Stufe",
+          "action": "Aktion"
+        }
+      },
+      "pair_enocean": {
+        "title": "EnOcean-Sensor einlernen",
+        "description": "Lösen Sie jetzt Ihren EnOcean-Sensor aus und wählen Sie anschließend die gefundene EURID und das Produktprofil aus.",
+        "data": {
+          "eur_id": "Gefundenes EnOcean-Gerät (EURID)",
+          "product_guid": "Produktprofil",
+          "display_name": "Anzeigename (optional)",
+          "rescan": "60s Funk-Scan neu starten"
+        }
+      },
+      "legacy_pair_enocean": {
+        "title": "Bidirektionales Einlernen (FSR61 / FUD61 / FSB61)",
+        "description": "Lernen Sie einen klassischen EnOcean-Aktor über bidirektionales Teach-In ein.",
+        "data": {
+          "product_guid": "Aktor-Modell",
+          "step_action": "Assistenten-Schritt"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Kommunikation mit dem Eltako-Gateway fehlgeschlagen.",
+      "no_device_selected": "Bitte wählen oder geben Sie eine EnOcean-EURID zum Einlernen ein.",
+      "pairing_failed": "Das EnOcean-Einlernen am Gateway ist fehlgeschlagen."
     }
   }
 }

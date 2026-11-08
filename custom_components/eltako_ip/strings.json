@@ -18,6 +18,13 @@
           "port": "Port",
           "pop": "Proof of Possession (PoP)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Eltako Series 62/64 IP",
+        "description": "Enter the updated Proof of Possession (PoP) code for your Eltako gateway.",
+        "data": {
+          "pop": "Proof of Possession (PoP)"
+        }
       }
     },
     "error": {
@@ -28,6 +35,7 @@
     "abort": {
       "already_configured": "Device is already configured in Home Assistant.",
       "reconfigure_successful": "Device was reconfigured successfully.",
+      "reauth_successful": "Reauthentication was successful.",
       "another_device": "The configured host belongs to a different Eltako device (different serial number)."
     }
   },
@@ -35,11 +43,36 @@
     "step": {
       "init": {
         "title": "Eltako Gateway Options",
+        "description": "Configure polling interval, EnOcean repeater level, or launch the interactive EnOcean pairing wizard.",
         "data": {
           "scan_interval": "Polling Interval (seconds)",
-          "repeater_level": "EnOcean Repeater Level"
+          "repeater_level": "EnOcean Repeater Level",
+          "action": "Action"
+        }
+      },
+      "pair_enocean": {
+        "title": "Pair EnOcean Sensor",
+        "description": "Trigger your EnOcean sensor now, then select its discovered EURID and product profile below.",
+        "data": {
+          "eur_id": "Discovered EnOcean Device (EURID)",
+          "product_guid": "Product Profile",
+          "display_name": "Display Name (optional)",
+          "rescan": "Restart 60s Radio Scan"
+        }
+      },
+      "legacy_pair_enocean": {
+        "title": "Bidirectional Legacy EnOcean Actuator Pairing",
+        "description": "Pair a legacy EnOcean actuator (FSR61, FUD61, FSB61, FHK14) using bidirectional teach-in.",
+        "data": {
+          "product_guid": "Actuator Model",
+          "step_action": "Wizard Action"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to communicate with the Eltako gateway.",
+      "no_device_selected": "Please select or enter an EnOcean EURID to pair.",
+      "pairing_failed": "EnOcean pairing failed on the gateway."
     }
   }
 }

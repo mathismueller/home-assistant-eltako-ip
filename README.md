@@ -1,10 +1,12 @@
 # Eltako Series 62/64 IP Home Assistant Integration & Client
 
-A Home Assistant integration and typed async Python client (`aioeltako-ip`) for **Eltako Series 62-IP and Series 64-IPM** smart home devices, targeting **Home Assistant 2026.11+**. The goal is to enable local setup of actuators and enocean devices without the manufacturer app through the REST-API.
+A Home Assistant integration and typed async Python client (`aioeltako-ip`) for **Eltako Series 62-IP and Series 64-IPM** smart home devices, targeting **Home Assistant 2026.11+**. It enables 100% local setup, control, EnOcean provisioning, Matter bridge management, firmware management, and autonomous on-device automation configuration without requiring the manufacturer mobile app.
 
-Supported hardware:
-- **Actuators**: ESR64PF-IPM (only tested device so far), ESR64NP-IPM, EUD64NPN-IPM, ESB64NP-IPM.
-- **EnOcean Gateway**: EOA64 radio adapter with connected EnOcean sensors (e.g. FTK solar window/door contacts).
+### Supported Hardware
+- **Relay Actuators (`switch`)**: `ESR64PF-IPM`, `ESR64NP-IPM`, `ESR62NP-IP`, `ESR62PF-IP`, `E2SR64NP-IPM` (2-channel), `FSR61`.
+- **Universal Dimmers (`light`)**: `EUD64NPN-IPM`, `EUD62NPN-IP`, `EUD62NPN-IPM`, `FUD61`.
+- **Shading & Roller Shutter Actuators (`cover`)**: `ESB64NP-IPM`, `ESB62NP-IP`, `FSB61`.
+- **EnOcean Gateway (`EOA64`)**: Paired EnOcean sensors and actuators (e.g. `FTK` solar window/door contacts, wall rockers, power/climate/environmental sensors).
 
 ---
 
@@ -52,10 +54,10 @@ HA_CONFIG_DIR=~/.homeassistant
 
 ## Deploying to Home Assistant for Local Testing
 
-A dedicated deployment tool is provided at `scripts/deploy.py` to test the integration directly with any running Home Assistant instance.
+A dedicated deployment tool is provided at `scripts/deploy.py` to test the integration directly with any running Home Assistant instance. Note that `src/aioeltako_ip` is maintained as a standalone library within this repository and is automatically bundled into the target Home Assistant `custom_components/eltako_ip/` folder during deployment.
 
 ### 1. Local Deployment (Copy Mode)
-Copies the component into your Home Assistant `custom_components` directory and automatically bundles `aioeltako_ip` inside it (so no PyPI install is required in Home Assistant):
+Copies the component into your Home Assistant `custom_components` directory and automatically bundles `src/aioeltako_ip` inside it:
 
 ```bash
 # Explicit path:
@@ -85,27 +87,57 @@ python3 scripts/deploy.py --restart
 
 ---
 
-## Home Assistant Setup
+## Home Assistant Setup & Capabilities
 
-### Adding the Integration in Home Assistant 
-1. Ensure the integration has been deployed via `scripts/deploy.py` or add this repo as a custom repository. Deployment via the **Marketplace** is not possible yet.
+### Adding the Integration in Home Assistant
+1. Deploy via `scripts/deploy.py` or add this repository as a custom HACS repository.
 2. Restart Home Assistant.
-3. In Home Assistant, navigate to **Settings** > **Devices & Services** > **Add Integration**.
-4. Search for **Eltako Series 62/64 IP**.
-5. Enter:
-   - **Host**: The IP address of your device (e.g. `192.168.1.100`).
+3. Navigate to **Settings** > **Devices & Services** > **Add Integration** and search for **Eltako Series 62/64 IP**.
+4. Enter:
+   - **Host**: IP address of your device (e.g. `192.168.1.100`).
    - **Port**: `443` (default).
-   - **Proof of Possession (PoP)**: The 8-digit PIN printed on the device sticker.
+   - **Proof of Possession (PoP)**: The PIN printed on the device sticker.
 
-### Supported Entities
-Once added, the integration automatically discovers and creates:
-* **Relay Switch (`switch.<device_name>`)**: Controls the potential-free relay contact on ESR64PF-IPM.
-* **Window/Door Contact (`binary_sensor.<sensor_name>`)**: Real-time open/closed state of FTK EnOcean sensors.
-* **Wired Input (`binary_sensor.<device_name>_wired_input`)**: On/off state of physical wall switches wired to terminal 2.
-* **EnOcean RSSI (`sensor.<sensor_name>_signal_strength`)**: Signal strength diagnostics in dBm.
-* **EnOcean Memory (`sensor.eltako_enocean_devices_capacity`)**: Diagnostic sensor tracking paired sensor capacity.
-* **Repeater Mode (`select.eltako_enocean_repeater`)**: Controls EOA64 repeater level (`off`, `level_1`, `level_2`).
-* **Pairing Scan (`button.eltako_scan_enocean_devices`)**: Puts the gateway into pairing mode to learn new EnOcean devices.
+### Platforms & Entities
+- **Switch (`switch`)**:
+  - 1-channel and 2-channel relay outputs (`Relay`, `Relay Channel 1`, `Relay Channel 2`).
+  - `Auto Update` configuration toggle (`PUT /update/config`).
+  - Per-device `Expose to Matter` configuration switch (`POST`/`DELETE /services/matter/devices`).
+- **Light (`light`)**:
+  - Universal dimmer brightness control (`0–100%`) with `lastBrightness` restore (`EUD64NPN-IPM`, `EUD62NPN-IP`, `FUD61`).
+- **Cover (`cover`)**:
+  - Roller shutter and blind position (`0–100%`) and slat tilt angle (`0–100%`) control (`ESB64NP-IPM`, `ESB62NP-IP`, `FSB61`).
+- **Binary Sensor (`binary_sensor`)**:
+  - Window/door contact (`FTK`), sensor connectivity status, 1ch/2ch physical wired inputs, and dynamic motion/smoke/moisture/vibration sensors.
+- **Sensor (`sensor`)**:
+  - EnOcean RSSI (`dBm`), `EnOcean Free Slots`, `Matter Bridged Devices`, `On-Device Automations`, plus dynamic telemetry (`power`, `electricEnergyMeter`, `temperature`, `humidity`, `illumination`, `co2`, `tvoc`, `batteryPercentageRemaining`, `windSpeed`).
+- **Select (`select`)**:
+  - `EnOcean Repeater Level` (`off`, `oneLevel`, `twoLevel`).
+  - `Update Check Schedule` (`6h`, `12h`, `24h`).
+  - `Wired Input Mode` (`buttonImpulseSwitch` Pushbutton vs `buttonSwitch` Kippschalter).
+  - Dynamic hardware enumeration settings (`edgeMode`, `dimCurve`, `runtimeMode`, `movementDirection`, `enableTilt`).
+  - Per-device EnOcean `Orientation` (`auto`, `clockwise0`, `clockwise90`, `clockwise180`, `clockwise270`).
+- **Number (`number`)**:
+  - `Wired Input Off-Timer` in seconds (on-device hardware staircase/auto-off timer).
+  - Dynamic hardware numeric settings (`minimumBrightness`, `maximumBrightness`, `runtime`, `offset`, `tiltRuntime`, temperature/humidity offsets).
+- **Button (`button`)**:
+  - `Identify` (`POST /identify` to flash the physical LED).
+  - `Start EnOcean Pairing Scan` (`POST /services/enocean/scan`).
+  - Per-sensor `Unpair EnOcean Device` (`DELETE /services/enocean/devices/{guid}`).
+- **Update (`update`)**:
+  - `Firmware` update status entity showing installed vs. latest firmware version and OTA server metadata.
+
+### Domain Services (`eltako_ip.*`)
+- `eltako_ip.identify_device`: Flash the physical LED on the actuator.
+- `eltako_ip.rename_device`: Update `displayName` in on-device flash and synchronize the Home Assistant Device Registry name.
+- `eltako_ip.start_enocean_scan`: Start a teach-in scan for new EnOcean sensors.
+- `eltako_ip.pair_enocean_device`: Pair a discovered EnOcean EURID to a product profile (with optional immediate rename).
+- `eltako_ip.unpair_enocean_device`: Delete a paired EnOcean sensor from NVRAM and remove it from the Device Registry.
+- `eltako_ip.legacy_pair_enocean_device`: Start or continue bidirectional EnOcean actuator pairing (`FSR61`, `FUD61`, `FSB61`, `FHK14`).
+- `eltako_ip.set_enocean_device_config`: Configure orientation or bridge direction on a paired EnOcean device.
+- `eltako_ip.expose_matter_device` / `eltako_ip.remove_matter_device` / `eltako_ip.reset_matter_bridge`: Manage the embedded Matter bridge.
+- `eltako_ip.create_automation` / `eltako_ip.update_automation` / `eltako_ip.delete_automation` / `eltako_ip.reset_automations`: Manage fail-safe autonomous on-device hardware automations.
+- `eltako_ip.upload_firmware`: Upload a local signed `.bin` firmware image directly to the device.
 
 ---
 
@@ -114,30 +146,37 @@ Once added, the integration automatically discovers and creates:
 ```text
 ├── custom_components/eltako_ip/   # Home Assistant custom component
 │   ├── manifest.json              # Integration metadata (min HA 2026.11)
-│   ├── config_flow.py             # UI configuration & Options flow
-│   ├── coordinator.py             # DataUpdateCoordinator (10s polling)
-│   ├── switch.py                  # Relay switch platform
-│   ├── binary_sensor.py           # Window/door contacts & wired input
-│   ├── sensor.py                  # EnOcean RSSI & capacity diagnostics
-│   ├── select.py                  # EnOcean repeater level control
-│   ├── button.py                  # Trigger EnOcean pairing scan
-│   ├── services.yaml              # Custom service definitions
-│   └── translations/              # German & English translations
-├── src/aioeltako_ip/              # Standalone async client library
+│   ├── config_flow.py             # Setup, Reauth, Reconfigure & EnOcean Pairing Wizard
+│   ├── coordinator.py             # DataUpdateCoordinator & EltakoData
+│   ├── entity.py                  # Unified EltakoGatewayEntity & EltakoDeviceEntity
+│   ├── switch.py                  # Relays (1ch/2ch), Auto-Update & Matter Exposure
+│   ├── light.py                   # Universal Dimmers (EUD64NPN-IPM / EUD62NPN-IP / FUD61)
+│   ├── cover.py                   # Shading & Blind Actuators (ESB64NP-IPM / ESB62NP-IP / FSB61)
+│   ├── binary_sensor.py           # Contacts, Connectivity & Wired Inputs
+│   ├── sensor.py                  # EnOcean RSSI, Capacity, Matter, Automations & Telemetry
+│   ├── select.py                  # Repeater, Schedule, Wired Input Mode & Hardware Settings
+│   ├── number.py                  # Off-Timer & Numeric Hardware Settings
+│   ├── button.py                  # Identify, EnOcean Scan & Unpair
+│   ├── update.py                  # Firmware Update Entity
+│   ├── diagnostics.py             # Redacted Diagnostics Dump
+│   ├── services.yaml              # Domain Service Definitions
+│   └── translations/              # English & German UI Translations
+├── src/aioeltako_ip/              # Standalone async client library (single source of truth)
 │   ├── client.py                  # EltakoClient (aiohttp-based)
 │   ├── models.py                  # Typed dataclasses
 │   └── exceptions.py              # Error hierarchy
-├── scripts/                       # Developer & maintenance utilities
-│   ├── ...                  
+├── scripts/                       # Developer & deployment utilities
+│   ├── deploy.py                  # Local/SSH deployment script (bundles src/aioeltako_ip)
+│   └── dev_cli.py                 # Fixture dumper, identify & offline firmware uploader
 ├── tests/                         # Pytest test suite
-│   ├── fixtures/                  # Synthetic mock fixtures (committed)
+│   ├── fixtures/                  # Anonymized synthetic fixtures (committed)
 │   ├── fixtures/local/            # Raw hardware fixture dumps (git-ignored)
 │   ├── conftest.py                # Pytest configuration & --live flag
-│   ├── test_client.py             # Mock unit tests (aioresponses, run in CI)
-│   ├── test_ha_entities.py        # Entity tests against Home Assistant Core classes
+│   ├── test_client.py             # Mock unit tests (aioresponses)
+│   ├── test_ha_entities.py        # Home Assistant entity & diagnostics unit tests
 │   └── test_live.py               # Real hardware integration tests (--live)
-├── hacs.json                      # Marketplace repository configuration
-├── ROADMAP.md                     # Roadmap to 100% app feature parity
+├── hacs.json                      # HACS Marketplace repository configuration
+├── ROADMAP.md                     # Completed 6-phase roadmap
 └── pyproject.toml                 # uv project & packaging configuration
 ```
 
@@ -160,7 +199,7 @@ All product names, trademarks, and registered trademarks are property of their r
 
 ## AI Assistance Disclosure
 
-Parts of this project—including reverse-engineering and parsing of the on-device OpenAPI 3.1 specification, async client scaffolding, synthetic fixture anonymization, Home Assistant entity platforms, and test suites—were developed with the assistance of AI pair-programming tools (Google Antigravity / Gemini models). 
+Parts of this project—including reverse-engineering and parsing of the on-device OpenAPI 3.1 specification, async client scaffolding, synthetic fixture anonymization, Home Assistant entity platforms, and test suites—were developed with the assistance of AI pair-programming tools (Google Antigravity / Gemini models).
 
 All code, models, and integration platforms have been reviewed, statically type-checked with `ty`, verified against synthetic mock suites, and tested against physical Eltako Series 64 hardware.
 

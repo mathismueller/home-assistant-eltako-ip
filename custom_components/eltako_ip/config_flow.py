@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from pathlib import Path
+import sys
+from typing import Any, Optional
 
 import voluptuous as vol
 
@@ -23,18 +25,22 @@ try:
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
+        EnOceanScanResultItem,
     )
 except ImportError:
-    import sys
-    from pathlib import Path
-    _pkg_dir = str(Path(__file__).parent)
-    if _pkg_dir not in sys.path:
-        sys.path.insert(0, _pkg_dir)
+    for _candidate in (
+        Path(__file__).resolve().parent.parent.parent / "src",
+        Path(__file__).resolve().parent,
+    ):
+        if (_candidate / "aioeltako_ip").is_dir() and str(_candidate) not in sys.path:
+            sys.path.insert(0, str(_candidate))
+            break
     from aioeltako_ip import (  # type: ignore[no-redef]
         AuthenticationError,
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
+        EnOceanScanResultItem,
     )
 
 from .const import (
@@ -45,9 +51,15 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    PRODUCT_FSB61,
+    PRODUCT_FSR61,
+    PRODUCT_FTK_CONTACT,
+    PRODUCT_FUD61,
+    PRODUCT_NAMES_FALLBACK,
     REPEATER_LEVEL_OFF,
     REPEATER_OPTIONS,
 )
+from .coordinator import EltakoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,6 +114,59 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle reauthentication when PoP or API key is rejected."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm reauthentication with updated Proof of Possession (PoP)."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            host = reauth_entry.data[CONF_HOST]
+            port = reauth_entry.data.get(CONF_PORT, DEFAULT_PORT)
+            pop = user_input[CONF_POP]
+
+            session = async_get_clientsession(self.hass, verify_ssl=False)
+            client = EltakoClient(host=host, port=port, pop=pop, session=session)
+            try:
+                await client.login()
+                await client.get_system()
+            except AuthenticationError:
+                errors["base"] = "invalid_auth"
+            except EltakoConnectionError:
+                errors["base"] = "cannot_connect"
+            except EltakoError:
+                errors["base"] = "unknown"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reauth")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data_updates={CONF_POP: pop},
+                )
+            finally:
+                await client.close()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_POP, default=reauth_entry.data.get(CONF_POP, "")
+                ): str,
+            }
+        )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=schema,
             errors=errors,
         )
 
@@ -171,14 +236,58 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class EltakoOptionsFlowHandler(OptionsFlow):
-    """Handle options flow for Eltako Series 62/64 IP."""
+    """Handle options flow and interactive EnOcean pairing wizard for Eltako IP."""
+
+    def __init__(self) -> None:
+        """Initialize options flow state."""
+        self._pending_options: dict[str, Any] = {}
+        self._scan_results: list[EnOceanScanResultItem] = []
+
+    def _get_coordinator(self) -> Optional[EltakoDataUpdateCoordinator]:
+        if hasattr(self.config_entry, "runtime_data") and self.config_entry.runtime_data:
+            return self.config_entry.runtime_data
+        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the options."""
+        """Manage general options or launch interactive EnOcean pairing wizards."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            action = user_input.pop("action", "save_settings")
+            self._pending_options = {
+                CONF_SCAN_INTERVAL: user_input.get(
+                    CONF_SCAN_INTERVAL,
+                    self.config_entry.options.get(
+                        CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                    ),
+                ),
+                "repeater_level": user_input.get(
+                    "repeater_level",
+                    self.config_entry.options.get("repeater_level", REPEATER_LEVEL_OFF),
+                ),
+            }
+
+            coord = self._get_coordinator()
+            if coord and "repeater_level" in user_input:
+                try:
+                    await coord.client.set_enocean_repeater(
+                        repeater_level=self._pending_options["repeater_level"]
+                    )
+                except EltakoError:
+                    _LOGGER.debug("Could not apply repeater_level in options flow")
+
+            if action == "pair_enocean":
+                if coord:
+                    try:
+                        await coord.client.start_enocean_scan()
+                    except EltakoError:
+                        _LOGGER.debug("Could not start EnOcean scan automatically")
+                return await self.async_step_pair_enocean()
+
+            if action == "legacy_pair_enocean":
+                return await self.async_step_legacy_pair_enocean()
+
+            return self.async_create_entry(title="", data=self._pending_options)
 
         options = self.config_entry.options
         schema = vol.Schema(
@@ -191,7 +300,163 @@ class EltakoOptionsFlowHandler(OptionsFlow):
                     "repeater_level",
                     default=options.get("repeater_level", REPEATER_LEVEL_OFF),
                 ): vol.In(REPEATER_OPTIONS),
+                vol.Optional("action", default="save_settings"): vol.In(
+                    {
+                        "save_settings": "Save Settings",
+                        "pair_enocean": "Pair EnOcean Sensor (Interactive Scan Wizard)",
+                        "legacy_pair_enocean": "Bidirectional Legacy Actuator Pairing (FSR61/FUD61/FSB61)",
+                    }
+                ),
             }
         )
 
         return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_pair_enocean(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Interactive EnOcean sensor pairing wizard."""
+        errors: dict[str, str] = {}
+        coord = self._get_coordinator()
+
+        if user_input is not None:
+            if user_input.get("rescan"):
+                if coord:
+                    try:
+                        await coord.client.start_enocean_scan()
+                    except EltakoError:
+                        errors["base"] = "cannot_connect"
+            else:
+                eur_id_raw = user_input.get("eur_id")
+                product_guid = user_input.get("product_guid", PRODUCT_FTK_CONTACT)
+                display_name = user_input.get("display_name", "").strip()
+                if not eur_id_raw:
+                    errors["base"] = "no_device_selected"
+                elif coord:
+                    try:
+                        resp = await coord.client.pair_enocean_device(
+                            eur_id=int(eur_id_raw),
+                            product_guid=str(product_guid),
+                        )
+                        device_guid = resp.get("deviceGuid")
+                        if display_name and device_guid:
+                            await coord.client.rename_device(device_guid, display_name)
+                        await coord.async_request_refresh()
+                        return self.async_create_entry(
+                            title="",
+                            data=self._pending_options or dict(self.config_entry.options),
+                        )
+                    except EltakoError:
+                        errors["base"] = "pairing_failed"
+
+        # Poll scan results from device
+        discovered_options: dict[str, str] = {}
+        product_options: dict[str, str] = {
+            PRODUCT_FTK_CONTACT: PRODUCT_NAMES_FALLBACK[PRODUCT_FTK_CONTACT],
+            PRODUCT_FSR61: PRODUCT_NAMES_FALLBACK[PRODUCT_FSR61],
+            PRODUCT_FUD61: PRODUCT_NAMES_FALLBACK[PRODUCT_FUD61],
+            PRODUCT_FSB61: PRODUCT_NAMES_FALLBACK[PRODUCT_FSB61],
+        }
+        if coord:
+            for p_guid, p_spec in coord.data.products.items():
+                if p_spec.name:
+                    product_options[p_guid] = f"{p_spec.name} ({p_guid[:8]})"
+            try:
+                scan_res = await coord.client.get_enocean_scan_results()
+                self._scan_results = scan_res
+                for item in scan_res:
+                    prod_label = (
+                        coord.data.get_product_name(item.product_guid, "EnOcean Sensor")
+                        if item.product_guid
+                        else "EnOcean Sensor"
+                    )
+                    discovered_options[str(item.eur_id)] = (
+                        f"{prod_label} — EURID {item.eur_id} ({item.signal_strength} dBm)"
+                    )
+            except EltakoError:
+                _LOGGER.debug("Could not fetch EnOcean scan results")
+
+        if discovered_options:
+            default_eur = next(iter(discovered_options.keys()))
+            eur_field: Any = vol.In(discovered_options)
+        else:
+            default_eur = ""
+            eur_field = str
+
+        schema = vol.Schema(
+            {
+                vol.Optional("eur_id", default=default_eur): eur_field,
+                vol.Optional(
+                    "product_guid", default=PRODUCT_FTK_CONTACT
+                ): vol.In(product_options),
+                vol.Optional("display_name", default=""): str,
+                vol.Optional("rescan", default=False): bool,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="pair_enocean",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_legacy_pair_enocean(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Interactive wizard for bidirectional legacy EnOcean actuators (FSR61, FUD61, FSB61)."""
+        errors: dict[str, str] = {}
+        coord = self._get_coordinator()
+
+        if user_input is not None and coord:
+            step_action = user_input.get("step_action", "start")
+            product_guid = user_input.get("product_guid", PRODUCT_FSR61)
+            try:
+                if step_action == "start":
+                    await coord.client.start_enocean_legacy_pair(
+                        {"productGuid": product_guid}
+                    )
+                elif step_action == "continue":
+                    await coord.client.continue_enocean_legacy_pair(
+                        {"productGuid": product_guid}
+                    )
+                    await coord.async_request_refresh()
+                    return self.async_create_entry(
+                        title="",
+                        data=self._pending_options or dict(self.config_entry.options),
+                    )
+                elif step_action == "finish":
+                    await coord.async_request_refresh()
+                    return self.async_create_entry(
+                        title="",
+                        data=self._pending_options or dict(self.config_entry.options),
+                    )
+            except EltakoError:
+                errors["base"] = "pairing_failed"
+
+        legacy_products = {
+            PRODUCT_FSR61: "FSR61 Relay Actuator",
+            PRODUCT_FUD61: "FUD61 Dimmer Actuator",
+            PRODUCT_FSB61: "FSB61 Shading/Blind Actuator",
+            "23b9e65d-ec47-400b-982e-4d04ef5c33f4": "FHK14 Heating/Cooling Actuator",
+        }
+
+        schema = vol.Schema(
+            {
+                vol.Required("product_guid", default=PRODUCT_FSR61): vol.In(
+                    legacy_products
+                ),
+                vol.Required("step_action", default="start"): vol.In(
+                    {
+                        "start": "1. Start Teach-In Telegram",
+                        "continue": "2. Confirm Actuator Response & Complete",
+                        "finish": "Close Wizard",
+                    }
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="legacy_pair_enocean",
+            data_schema=schema,
+            errors=errors,
+        )

@@ -1,0 +1,5 @@
+{
+  "updateServerUri": "update.eltako.com",
+  "autoUpdate": false,
+  "updateSchedule": "12h"
+}

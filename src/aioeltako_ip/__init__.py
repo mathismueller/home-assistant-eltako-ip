@@ -9,13 +9,21 @@ from .exceptions import (
     UnsupportedCommandError,
 )
 from .models import (
+    AutomationAddOn,
+    AutomationRule,
     Characteristic,
     Device,
     EnOceanDevice,
+    EnOceanLegacyPairStatus,
     EnOceanScanResultItem,
     EnOceanStatus,
+    FirmwareUpdateInfo,
     MatterDevice,
+    MatterServiceInfo,
+    ProductCharacteristicSpec,
+    ProductSpec,
     SystemInfo,
+    UpdateConfig,
 )
 
 __all__ = [
@@ -25,11 +33,19 @@ __all__ = [
     "EltakoConnectionError",
     "DeviceNotFoundError",
     "UnsupportedCommandError",
+    "AutomationAddOn",
+    "AutomationRule",
     "Characteristic",
     "Device",
     "EnOceanDevice",
+    "EnOceanLegacyPairStatus",
     "EnOceanScanResultItem",
     "EnOceanStatus",
+    "FirmwareUpdateInfo",
     "MatterDevice",
+    "MatterServiceInfo",
+    "ProductCharacteristicSpec",
+    "ProductSpec",
     "SystemInfo",
+    "UpdateConfig",
 ]

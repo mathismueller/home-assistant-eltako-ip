@@ -8,6 +8,6 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mathismueller/home-assistant-eltako-ip/issues",
   "requirements": [],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homeassistant": "2026.11.0"
 }

@@ -1,0 +1,17 @@
+{
+  "location": "http://update.eltako.com:80",
+  "headers": [],
+  "requestType": "custom",
+  "schema": "TBD",
+  "data": {
+    "auth": {
+      "certificate": "-----BEGIN CERTIFICATE-----\nSYNTHETIC_TEST_CERTIFICATE\n-----END CERTIFICATE-----\n"
+    },
+    "thumbprint": "SYNTHETIC_THUMBPRINT_00000000000000000000000",
+    "update": {
+      "version": "eyJhbGciOiJQUzI1NiJ9.eyJ2ZXJzaW9uIjoiMi41LjAifQ.signature",
+      "desiredVersion": "0.0.0"
+    },
+    "currentVersion": "2.5.0"
+  }
+}

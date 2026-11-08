@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOST, CONF_POP, DOMAIN
-from .coordinator import EltakoDataUpdateCoordinator
+from .const import CONF_HOST, CONF_POP
+from .coordinator import EltakoConfigEntry
+from .entity import get_coordinator
 
 TO_REDACT = {
     CONF_POP,
@@ -18,14 +18,16 @@ TO_REDACT = {
     "serial_number",
     "eur_id",
     "eurId",
+    "certificate",
+    "thumbprint",
 }
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: EltakoConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: EltakoDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = get_coordinator(hass, entry)
 
     data = {
         "entry_data": dict(entry.data),
@@ -50,6 +52,10 @@ async def async_get_config_entry_diagnostics(
                     {"identifier": i.identifier, "type": i.type, "value": i.value}
                     for i in d.infos
                 ],
+                "settings": [
+                    {"identifier": s.identifier, "type": s.type, "value": s.value}
+                    for s in d.settings
+                ],
             }
             for d in coordinator.data.devices.values()
         ],
@@ -65,20 +71,38 @@ async def async_get_config_entry_diagnostics(
         ),
         "enocean_devices": [
             {
+                "service_device_guid": d.service_device_guid,
+                "device_guid": d.device_guid,
                 "product_guid": d.product_guid,
                 "eur_id": d.eur_id,
                 "signal_strength": d.signal_strength,
                 "bridge_direction": d.bridge_direction,
+                "orientation": d.orientation,
                 "last_seen": d.last_seen,
             }
             for d in coordinator.data.enocean_devices.values()
         ],
         "matter_devices": [
             {
+                "service_device_guid": d.service_device_guid,
+                "device_guid": d.device_guid,
                 "product_guid": d.product_guid,
             }
             for d in coordinator.data.matter_devices
         ],
+        "update_config": {
+            "update_server_uri": coordinator.data.update_config.update_server_uri,
+            "auto_update": coordinator.data.update_config.auto_update,
+            "update_schedule": coordinator.data.update_config.update_schedule,
+        },
+        "firmware_info": {
+            "current_version": coordinator.data.firmware_info.current_version,
+            "desired_version": coordinator.data.firmware_info.desired_version,
+            "location": coordinator.data.firmware_info.location,
+            "certificate": coordinator.data.firmware_info.certificate,
+            "thumbprint": coordinator.data.firmware_info.thumbprint,
+        },
+        "automations": [r.to_dict() for r in coordinator.data.automations],
     }
 
     return async_redact_data(data, TO_REDACT)
