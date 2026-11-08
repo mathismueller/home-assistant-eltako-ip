@@ -122,7 +122,6 @@ python3 scripts/deploy.py --restart
   - Dynamic hardware numeric settings (`minimumBrightness`, `maximumBrightness`, `runtime`, `offset`, `tiltRuntime`, temperature/humidity offsets).
 - **Button (`button`)**:
   - `Identify` (`POST /identify` to flash the physical LED).
-  - `Start EnOcean Pairing Scan` (`POST /services/enocean/scan`).
   - Per-sensor `Unpair EnOcean Device` (`DELETE /services/enocean/devices/{guid}`).
 - **Update (`update`)**:
   - `Firmware` update status entity showing installed vs. latest firmware version and OTA server metadata.
@@ -176,6 +175,7 @@ python3 scripts/deploy.py --restart
 │   ├── test_ha_entities.py        # Home Assistant entity & diagnostics unit tests
 │   └── test_live.py               # Real hardware integration tests (--live)
 ├── hacs.json                      # HACS Marketplace repository configuration
+├── ROADMAP.md                     # Phased roadmap for On-Device Automations
 └── pyproject.toml                 # uv project & packaging configuration
 ```
 
