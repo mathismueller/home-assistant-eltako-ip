@@ -26,7 +26,6 @@ from custom_components.eltako_ip.binary_sensor import (
 )
 from custom_components.eltako_ip.button import (
     EltakoIdentifyButton,
-    EltakoStartEnOceanScanButton,
     EltakoUnpairEnOceanDeviceButton,
 )
 from custom_components.eltako_ip.coordinator import EltakoData
@@ -302,17 +301,13 @@ def test_diagnostic_and_characteristic_sensors(mock_coordinator):
 
 @pytest.mark.asyncio
 async def test_repeater_select_and_buttons(mock_coordinator):
-    """Test EnOcean repeater level selector, identify button, scan button, and unpair button."""
+    """Test EnOcean repeater level selector, identify button, and unpair button."""
     repeater = EltakoRepeaterSelect(mock_coordinator)
     assert repeater.current_option == "oneLevel"
     await repeater.async_select_option("twoLevel")
     mock_coordinator.client.set_enocean_repeater.assert_called_with(
         repeater_level="twoLevel"
     )
-
-    scan_button = EltakoStartEnOceanScanButton(mock_coordinator)
-    await scan_button.async_press()
-    mock_coordinator.client.start_enocean_scan.assert_called_once()
 
     id_button = EltakoIdentifyButton(mock_coordinator)
     await id_button.async_press()

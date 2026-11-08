@@ -8,7 +8,7 @@ from typing import Optional
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from aioeltako_ip import DeviceNotFoundError
@@ -28,9 +28,15 @@ async def async_setup_entry(
     """Set up Eltako button entities."""
     coordinator = get_coordinator(hass, entry)
 
+    # Clean up legacy standalone scan button if present in the Entity Registry
+    ent_reg = er.async_get(hass)
+    legacy_scan_uid = f"{coordinator.system_info.serial_number}_start_enocean_scan"
+    legacy_ent_id = ent_reg.async_get_entity_id("button", DOMAIN, legacy_scan_uid)
+    if legacy_ent_id:
+        ent_reg.async_remove(legacy_ent_id)
+
     entities: list[ButtonEntity] = [
         EltakoIdentifyButton(coordinator),
-        EltakoStartEnOceanScanButton(coordinator),
     ]
 
     for eo_dev in coordinator.data.enocean_devices.values():
@@ -64,28 +70,6 @@ class EltakoIdentifyButton(EltakoGatewayEntity, ButtonEntity):
             "Physical device identification triggered on %s",
             self.coordinator.client.host,
         )
-
-
-class EltakoStartEnOceanScanButton(EltakoGatewayEntity, ButtonEntity):
-    """Button to start EnOcean teach-in scanning."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:antenna"
-    _attr_translation_key = "start_enocean_scan"
-
-    def __init__(self, coordinator: EltakoDataUpdateCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{coordinator.system_info.serial_number}_start_enocean_scan"
-        )
-        self._attr_name = "Start EnOcean Pairing Scan"
-
-    async def async_press(self) -> None:
-        """Trigger EnOcean scan mode on the device."""
-        await self._async_execute(
-            self.coordinator.client.start_enocean_scan(), refresh=False
-        )
-        _LOGGER.info("EnOcean pairing scan mode initiated via button")
 
 
 class EltakoUnpairEnOceanDeviceButton(EltakoDeviceEntity, ButtonEntity):
