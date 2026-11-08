@@ -3,11 +3,25 @@
   "name": "Eltako Series 62/64 IP",
   "codeowners": ["@mathismueller"],
   "config_flow": true,
+  "dhcp": [
+    {
+      "hostname": "eltako-*",
+      "macaddress": "C8F5D6*"
+    },
+    {
+      "hostname": "eltako-*"
+    }
+  ],
   "documentation": "https://github.com/mathismueller/home-assistant-eltako-ip",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mathismueller/home-assistant-eltako-ip/issues",
   "requirements": [],
   "version": "0.2.0",
+  "zeroconf": [
+    {
+      "type": "_eltako._tcp.local."
+    }
+  ],
   "homeassistant": "2026.11.0"
 }

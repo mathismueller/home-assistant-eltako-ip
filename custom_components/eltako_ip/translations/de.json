@@ -1,4 +1,5 @@
 {
+  "flow_title": "{name}",
   "config": {
     "step": {
       "user": {
@@ -7,6 +8,13 @@
         "data": {
           "host": "Host / IP-Adresse",
           "port": "Port",
+          "pop": "Proof of Possession (PoP)"
+        }
+      },
+      "discovery_confirm": {
+        "title": "{name} gefunden",
+        "description": "Ein Eltako IP-Gerät ({name} unter {host}) wurde im Netzwerk gefunden. Geben Sie den Proof-of-Possession (PoP) Code vom Geräteaufkleber ein, um die Einrichtung abzuschließen.",
+        "data": {
           "pop": "Proof of Possession (PoP)"
         }
       },
@@ -34,6 +42,7 @@
     },
     "abort": {
       "already_configured": "Gerät ist in Home Assistant bereits konfiguriert.",
+      "cannot_connect": "Verbindung zum gefundenen Eltako-Gerät fehlgeschlagen.",
       "reconfigure_successful": "Gerät wurde erfolgreich neu konfiguriert.",
       "reauth_successful": "Authentifizierung erfolgreich aktualisiert.",
       "another_device": "Der angegebene Host gehört zu einem anderen Eltako-Gerät (abweichende Seriennummer)."

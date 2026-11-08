@@ -18,6 +18,8 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 try:
     from aioeltako_ip import (
@@ -76,6 +78,150 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Eltako Series 62/64 IP."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._discovered_host: Optional[str] = None
+        self._discovered_port: int = DEFAULT_PORT
+        self._discovered_name: str = "Eltako IP"
+        self._discovered_serial: Optional[str] = None
+        self._discovered_model: Optional[str] = None
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle Zeroconf (_eltako._tcp.local.) discovery."""
+        host = str(discovery_info.host)
+        port = int(discovery_info.port or DEFAULT_PORT)
+        props = discovery_info.properties or {}
+
+        serial = str(props.get("sn") or "").strip()
+        if not serial and discovery_info.hostname:
+            hostname_prefix = discovery_info.hostname.split(".")[0]
+            if hostname_prefix.lower().startswith("eltako-"):
+                serial = hostname_prefix[7:]
+
+        product_name = str(
+            props.get("pn") or props.get("md") or "Eltako Series 62/64 IP"
+        ).strip()
+        model = str(props.get("md") or product_name).strip()
+
+        if serial:
+            await self.async_set_unique_id(serial)
+            self._abort_if_unique_id_configured(
+                updates={CONF_HOST: host, CONF_PORT: port}
+            )
+        else:
+            self._async_abort_entries_match({CONF_HOST: host})
+
+        self._discovered_host = host
+        self._discovered_port = port
+        self._discovered_serial = serial or None
+        self._discovered_name = product_name
+        self._discovered_model = model
+
+        label = f"{product_name} ({serial})" if serial else f"{product_name} ({host})"
+        self.context["title_placeholders"] = {
+            "name": label,
+            "host": host,
+        }
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle DHCP (eltako-* / MAC OUI C8:F5:D6) discovery."""
+        host = str(discovery_info.ip)
+        hostname = str(discovery_info.hostname or "").strip()
+        serial = ""
+        if hostname.lower().startswith("eltako-"):
+            serial = hostname.split(".")[0][7:]
+
+        if serial:
+            await self.async_set_unique_id(serial)
+            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+        else:
+            self._async_abort_entries_match({CONF_HOST: host})
+
+        # Probe unauthenticated /.well-known/eltako/devices to confirm it is an Eltako IP device
+        session = async_get_clientsession(self.hass, verify_ssl=False)
+        client = EltakoClient(host=host, port=DEFAULT_PORT, session=session)
+        try:
+            wk = await client.get_well_known()
+            if not wk:
+                return self.async_abort(reason="cannot_connect")
+        except EltakoError:
+            return self.async_abort(reason="cannot_connect")
+        finally:
+            await client.close()
+
+        self._discovered_host = host
+        self._discovered_port = DEFAULT_PORT
+        self._discovered_serial = serial or None
+        self._discovered_name = "Eltako Series 62/64 IP"
+
+        label = (
+            f"Eltako IP ({serial})" if serial else f"Eltako IP ({host})"
+        )
+        self.context["title_placeholders"] = {
+            "name": label,
+            "host": host,
+        }
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_discovery_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm setup of a discovered Eltako IP device by entering its PoP code."""
+        errors: dict[str, str] = {}
+        host = self._discovered_host or ""
+        port = self._discovered_port
+
+        if user_input is not None:
+            pop = user_input[CONF_POP]
+            session = async_get_clientsession(self.hass, verify_ssl=False)
+            client = EltakoClient(host=host, port=port, pop=pop, session=session)
+            try:
+                await client.login()
+                system = await client.get_system()
+            except AuthenticationError:
+                errors["base"] = "invalid_auth"
+            except EltakoConnectionError:
+                errors["base"] = "cannot_connect"
+            except EltakoError:
+                errors["base"] = "unknown"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during discovery setup")
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(
+                    system.serial_number, raise_on_progress=False
+                )
+                self._abort_if_unique_id_configured(
+                    updates={CONF_HOST: host, CONF_PORT: port}
+                )
+                title = f"{system.product_name} ({system.serial_number})"
+                return self.async_create_entry(
+                    title=title,
+                    data={
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_POP: pop,
+                    },
+                )
+            finally:
+                await client.close()
+
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_POP): str}),
+            description_placeholders={
+                "name": self._discovered_name,
+                "host": host,
+                "serial": self._discovered_serial or "unknown",
+            },
+            errors=errors,
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

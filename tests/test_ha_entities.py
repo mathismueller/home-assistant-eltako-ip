@@ -487,3 +487,38 @@ async def test_diagnostics(mock_coordinator):
     assert diag["firmware_info"]["certificate"] == "**REDACTED**"
     assert diag["firmware_info"]["thumbprint"] == "**REDACTED**"
     assert len(diag["automations"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_zeroconf_autodiscovery_flow():
+    """Test Zeroconf (_eltako._tcp.local.) autodiscovery step in EltakoConfigFlow."""
+    from ipaddress import ip_address
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+    from custom_components.eltako_ip.config_flow import EltakoConfigFlow
+
+    flow = EltakoConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+    flow.async_set_unique_id = AsyncMock()
+    flow._abort_if_unique_id_configured = MagicMock()
+
+    discovery_info = ZeroconfServiceInfo(
+        ip_address=ip_address("192.0.2.1"),
+        ip_addresses=[ip_address("192.0.2.1")],
+        port=443,
+        hostname="eltako-0000000000.local.",
+        type="_eltako._tcp.local.",
+        name="C8F5D6000000._eltako._tcp.local.",
+        properties={
+            "pn": "ELTAKO-ESR64PF-IPM",
+            "sn": "0000000000",
+            "md": "ESR64PF-IPM",
+        },
+    )
+
+    result = await flow.async_step_zeroconf(discovery_info)
+    assert result["type"] == "form"
+    assert result["step_id"] == "discovery_confirm"
+    flow.async_set_unique_id.assert_called_once_with("0000000000")
+    assert flow.context["title_placeholders"]["name"] == "ELTAKO-ESR64PF-IPM (0000000000)"
+
