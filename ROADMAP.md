@@ -1,16 +1,26 @@
-# Roadmap: On-Device Automations (`ELTAKO Basic Automations`)
+# v0.3.0 Roadmap: On-Device Automations & Visual Sidebar Studio
 
 ## 1. Overview & Motivation
 
-Eltako Series 62-IP and Series 64-IPM actuators include an embedded, fail-safe automation engine (**ELTAKO Basic Automations**) exposed via the local REST endpoint `/services/eltako/automations`.
+Eltako Series 62-IP and Series 64-IPM actuators include an embedded, fail-safe hardware automation engine (**ELTAKO Basic Automations**) exposed via the local REST endpoint `/services/eltako/automations`.
 
 Unlike Home Assistant software automations—which require the Wi-Fi network, Home Assistant server, and polling loop to be online—**on-device automations execute directly inside the Eltako microcontroller**:
 - **Zero-latency hardware execution**: Physical wired inputs (`input`, `inputChannel1`, `inputChannel2`) and paired EnOcean sensors (`FT55` rockers, `FTK` window contacts, motion/climate sensors) trigger the local relay (`ESR`), dimmer (`EUD`), or shading actuator (`ESB`) instantaneously.
 - **Fail-safe operation**: Wall switches, staircase timers, window-open lockouts, and dimmer curves continue to work even if Wi-Fi or Home Assistant is down.
 
+### Why an Optional Sidebar Dashboard Instead of Config Flow Forms?
+Home Assistant's multi-step Options Flow modals are great for simple settings, but poorly suited for managing a matrix of hardware automation rules across multiple gateways, input channels, timer addons, and dimmer extensions.
+
+Home Assistant allows custom integrations to register:
+1. **Static Frontend Assets** (`hass.http.async_register_static_paths`) served directly from `custom_components/eltako_ip/frontend/`.
+2. **An Optional Custom Sidebar Panel** (`panel_custom.async_register_panel` / `frontend.async_remove_panel`) that can be toggled on or off in the integration options (or via a gateway config switch).
+3. **Dedicated WebSocket API Commands** (`@websocket_api.websocket_command`) that give the frontend panel real-time access to all configured Eltako gateways, their paired EnOcean devices, product capability schemas, and live `/services/eltako/automations` rules.
+
+Because the panel is mounted as a native Home Assistant Custom Element (`<eltako-automations-panel>`), it receives Home Assistant's live `hass` object directly—inheriting user authentication (`hass.callWS(...)`), active dark/light theme CSS variables (`--card-background-color`, `--primary-color`), and localization without needing external dependencies or an iframe login.
+
 ---
 
-## 2. Current Baseline (v0.2.1)
+## 2. Current Baseline (`v0.2.1`)
 
 The integration already provides the foundational building blocks for on-device automations:
 
@@ -79,50 +89,58 @@ The Eltako firmware groups on-device automations into three families depending o
 
 ---
 
-## 4. Phased Implementation Plan
+## 4. `v0.3.0` Architecture & Phased Implementation Plan
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: Rich Models & Validation"] --> P2["Phase 2: Per-Rule Entities"]
-    P2 --> P3["Phase 3: Options Flow Rule Builder"]
-    P3 --> P4["Phase 4: Advanced Dimmer & Shading Presets"]
+    P1["Phase 1: Rich Models & Capability Engine"] --> P2["Phase 2: WebSocket API & Optional Sidebar Panel"]
+    P2 --> P3["Phase 3: Visual HTML/JS Automation Studio"]
+    P3 --> P4["Phase 4: One-Click Hardware Presets & Per-Rule Entities"]
 ```
 
-### Phase 1: Rich Data Models & Characteristic Discovery (`aioeltako-ip`)
-- **Goal**: Expand [`AutomationRule`](src/aioeltako_ip/models.py) and [`AutomationAddOn`](src/aioeltako_ip/models.py) to losslessly represent all hardware automation schemas.
+### Phase 1: Rich Data Models & Capability Engine (`aioeltako-ip`)
+- **Goal**: Expand [`AutomationRule`](src/aioeltako_ip/models.py) and [`AutomationAddOn`](src/aioeltako_ip/models.py) to losslessly represent all hardware automation schemas across `ESR`, `EUD`, and `ESB` devices.
 - **Deliverables**:
-  - Add typed helpers for all 12 `ESR`/`ESB` `addOns` (`prewarning`, `longPressOffTimer`, `targetValue`, `targetAngle`, `automaticSlat`, `automaticReversal`, etc.).
-  - Add typed dataclasses for `EUD` `logicConfiguration` (`turnOnDuration`, `turnOffDuration`, `dimDuration`) and its 4 extensions (`childrenRoomExtension`, `slumberExtension`, `lightAlarmExtension`, `sceneValueOverrideExtension`).
-  - Surface `operatingStatus` and `errors` from `/services/eltako/automations` responses so misconfigured rules are visible in Home Assistant.
-  - Add a capability helper that inspects `coordinator.data.devices` and `coordinator.data.products` to list valid `(inputDeviceGuid, inputCharacteristicIdentifier)` triggers and `(outputDeviceGuid, outputCharacteristicIdentifier)` targets on the gateway.
+  - Full serialization/deserialization for all 12 `ESR`/`ESB` `addOns` (`prewarning`, `longPressOffTimer`, `targetValue`, `targetAngle`, `automaticSlat`, `automaticReversal`, etc.).
+  - Typed dataclasses for `EUD` `logicConfiguration` (`turnOnDuration`, `turnOffDuration`, `dimDuration`, `targetBrightness`) and its 4 comfort extensions (`childrenRoomExtension`, `slumberExtension`, `lightAlarmExtension`, `sceneValueOverrideExtension`).
+  - Surface `description`, `operatingStatus`, and `errors` from `/services/eltako/automations` responses.
+  - Build a capability matrix helper that inspects `coordinator.data.devices` and `coordinator.data.products` to enumerate valid triggers `(inputDeviceGuid, inputCharacteristicIdentifier)` and targets `(outputDeviceGuid, outputCharacteristicIdentifier)` for each gateway.
 
-### Phase 2: Per-Automation Entities in Home Assistant
-- **Goal**: Expose existing on-device automations as first-class controllable entities rather than only a summary count sensor.
+### Phase 2: WebSocket API & Optional Sidebar Registration (`custom_components/eltako_ip`)
+- **Goal**: Expose a fast, authenticated WebSocket bridge and a toggleable sidebar entry in Home Assistant.
 - **Deliverables**:
-  - **Enable/Disable Switch (`switch`)**: Create an `EltakoAutomationSwitch` (`EntityCategory.CONFIG`) for each rule (`automationGuid`) to toggle `enabled: true/false` directly from the UI, attached to the input device (e.g. `ELTAKO-Wired input` or paired EnOcean sensor) so users see which rules a sensor triggers.
-  - **Rule Logic & AddOn Entities (`select` / `number` / `switch`)**:
-    - Generalize [`EltakoWiredInputModeSelect`](custom_components/eltako_ip/select.py) and [`EltakoAutomationOffTimerNumber`](custom_components/eltako_ip/number.py) so *any* button/sensor automation rule (including EnOcean rockers and `FTK` contacts) exposes its logic mode and timer/target parameters on the triggering device's page.
-    - Expose a `Prewarning Flicker` toggle (`switch`) when `offTimer` or `longPressOffTimer` is active on `ESR62/64`.
-    - Expose a `Delete Automation` button (`button`) on user-created rules.
+  - **Optional Sidebar Toggle**:
+    - Add a `show_sidebar_panel` toggle (default `True` or configurable in Options Flow / gateway `SwitchEntity`) that dynamically registers or removes the **Eltako Studio** sidebar item using `panel_custom.async_register_panel` and `frontend.async_remove_panel` without requiring a Home Assistant restart.
+    - Serve self-contained static frontend bundle from `custom_components/eltako_ip/frontend/eltako-panel.js` via `hass.http.async_register_static_paths`.
+  - **WebSocket Commands (`custom_components/eltako_ip/websocket_api.py`)**:
+    - `eltako_ip/gateways`: List all configured Eltako IP gateways, their devices, EnOcean sensors, and product capability schemas.
+    - `eltako_ip/automations/list`: Return all on-device automations with resolved device names, characteristic labels, and health status.
+    - `eltako_ip/automations/save`: Create (`POST`) or update (`PUT`) an on-device automation rule with full `addOns` and `logicConfiguration` payload, followed by an immediate coordinator refresh.
+    - `eltako_ip/automations/delete` & `eltako_ip/automations/reset`: Delete a single rule or reset to factory defaults.
 
-### Phase 3: Interactive On-Device Automation Wizard (Options Flow)
-- **Goal**: Allow users to create, edit, and delete on-device automations entirely through the Home Assistant UI (**Configure → Manage On-Device Automations**) without writing YAML service calls.
+### Phase 3: Visual HTML/JS Automation Studio (`custom_components/eltako_ip/frontend/`)
+- **Goal**: Build a zero-dependency, native-feeling HTML/CSS/JS Web Component (`<eltako-automations-panel>`) styled with Home Assistant's Material / HaCard design tokens.
 - **Deliverables**:
-  - Add `"manage_automations": "Manage On-Device Automations"` to the gateway Options Flow menu ([`custom_components/eltako_ip/config_flow.py`](custom_components/eltako_ip/config_flow.py)).
-  - **Step 1 — Action Selection**:
-    - Create new on-device automation rule.
-    - Edit or delete an existing rule (showing human-readable labels like `ELTAKO-Wired input (input) → ELTAKO-ESR64PF-IPM (relay) [buttonImpulseSwitch]`).
-    - Reset automations to factory default (with confirmation).
-  - **Step 2 — Trigger & Target Picker**:
-    - Dropdown of available input devices + characteristics (`ELTAKO-Wired input`, paired EnOcean buttons/contacts/sensors).
-    - Dropdown of available output devices + characteristics (`relay`, `relayChannel1/2`, `targetBrightness`, `targetPosition`, `targetTilt`).
-  - **Step 3 — Logic & AddOn Configuration**:
-    - Context-aware form showing only the logics and addOns supported by the chosen output actuator (`ESR` relay vs `EUD` dimmer vs `ESB` shading).
-  - Automatic config entry reload upon creating or deleting a rule so per-rule entities appear immediately.
+  - **Gateway Selector & Overview Header**:
+    - Switch between multiple Eltako IP gateways on the network, displaying hardware model (`ESR64PF-IPM`, `EUD64NPN-IPM`, `ESB64NP-IPM`), active rule count, and factory-reset action.
+  - **Visual Rule Cards (`[Trigger] ──► [Logic & Timers] ──► [Target]`)**:
+    - Each on-device rule is displayed as an interactive flow card showing:
+      - **Input Trigger**: Device icon, friendly name (`ELTAKO-Wired input`, `ELTAKO-FTK`, `FT55`), characteristic (`input`, `contact`, `buttonA0`), and EnOcean RSSI badge.
+      - **Logic & AddOn Badges**: Logic mode pill (`Impulse Switch`, `Universal Dimmer`, etc.), active timer pills (`Off-Timer: 10s`, `Prewarning Flicker`), and `operatingStatus` health indicator.
+      - **Output Target**: Target actuator and channel (`Relay`, `Brightness 80%`, `Position 100% / Tilt 45°`).
+      - Quick actions: Enable/Disable toggle switch, Edit drawer, and Delete button.
+  - **Context-Aware Rule Editor Drawer / Modal**:
+    - Selecting an output actuator dynamically adapts the form:
+      - **Relay (`ESR`)**: Shows `Impulse`, `Switch`, `NO`, `NC`, `Target` logics + `offTimer`, `longPressOffTimer`, and `prewarning` flicker controls.
+      - **Dimmer (`EUD`)**: Shows dimmer logics, ramp duration sliders (`turnOnDuration`, `turnOffDuration`, `dimDuration`), and expandable cards for `Children's Room`, `Slumber`, and `Light Alarm` extensions.
+      - **Shading (`ESB`)**: Shows blind position/angle sliders (`targetValue`, `targetAngle`, `automaticSlat`, `automaticReversal`, `sceneWithReferenceMovement`).
 
-### Phase 4: Dimmer (`EUD`), Shading (`ESB`), and EnOcean Rocker Presets
-- **Goal**: Provide one-click templates for multi-rule hardware setups that otherwise require multiple REST calls.
+### Phase 4: One-Click Hardware Presets & Per-Rule Entities
+- **Goal**: Make common multi-rule setups effortless and expose individual rule toggles to Home Assistant dashboards/automations.
 - **Deliverables**:
-  - **EnOcean 2-Button Rocker Pairing Preset**: Automatically create the paired Up (`directionalUpButtonDimmer` / blind open) and Down (`directionalDownButtonDimmer` / blind close) rules when binding an EnOcean rocker (`FT55`) to a dimmer or blind.
-  - **Dimmer Comfort Extensions UI**: Expose `Children's Room Soft-On`, `Slumber Fade-Out`, and `Light Alarm Sunrise` extension toggles and durations on `EUD62/64` devices.
-  - **Window Contact (`FTK`) Lockout / Trigger Preset**: One-click template to bind a paired `FTK` window sensor to an actuator (e.g. disable roller shutter movement while patio door is open, or switch ventilation/heating relay).
+  - **One-Click Templates in the Sidebar Studio**:
+    - *Staircase Timer with Prewarning*: Configures wired input or EnOcean button with `buttonImpulseSwitch` + `offTimer` + 30s `prewarning` flicker.
+    - *2-Button EnOcean Rocker (`FT55`) Binding*: Automatically generates both the Up (`directionalUpButtonDimmer` / blind open) and Down (`directionalDownButtonDimmer` / blind close) rules in one click.
+    - *Window Open Lockout / Trigger (`FTK`)*: Binds a paired `FTK` contact sensor to a relay or blind actuator.
+  - **Per-Rule Enable/Disable Switch Entities**:
+    - Expose an `EltakoAutomationSwitch` (`EntityCategory.CONFIG`) for each rule on its triggering device page so Home Assistant automations can also enable or disable hardware rules dynamically (e.g., disabling a physical wall switch in child-lock mode at night).
