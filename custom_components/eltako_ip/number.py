@@ -13,6 +13,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from aioeltako_ip import AutomationRule
@@ -233,6 +234,16 @@ class EltakoAutomationOffTimerNumber(EltakoDeviceEntity, NumberEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Return True if coordinator is available and the active logic supports offTimer."""
+        if not super().available:
+            return False
+        rule = self._rule
+        if not rule:
+            return False
+        return rule.logic != "buttonSwitch"
+
+    @property
     def native_value(self) -> Optional[float]:
         """Return the current off-timer in seconds (0 if disabled)."""
         rule = self._rule
@@ -247,6 +258,10 @@ class EltakoAutomationOffTimerNumber(EltakoDeviceEntity, NumberEntity):
         rule = self._rule
         if not rule:
             return
+        if rule.logic == "buttonSwitch" and value > 0:
+            raise HomeAssistantError(
+                "Off-timer is not supported when Wired Input Mode is set to buttonSwitch."
+            )
         ms_val = int(round(value * 1000)) if value > 0 else 0
         await self._async_execute(
             self.coordinator.client.set_automation_logic(

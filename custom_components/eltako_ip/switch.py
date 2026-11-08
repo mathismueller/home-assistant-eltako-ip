@@ -46,8 +46,9 @@ async def async_setup_entry(
                     )
                 )
 
-        # Phase 3: Matter bridge exposure toggle per device
-        entities.append(EltakoMatterExposureSwitch(coordinator, device.device_guid))
+        # Phase 3: Matter bridge exposure toggle per device (only on Matter-capable -IPM models)
+        if coordinator.data.matter_supported:
+            entities.append(EltakoMatterExposureSwitch(coordinator, device.device_guid))
 
     async_add_entities(entities)
 

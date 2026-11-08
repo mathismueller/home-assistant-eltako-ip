@@ -176,7 +176,6 @@ python3 scripts/deploy.py --restart
 │   ├── test_ha_entities.py        # Home Assistant entity & diagnostics unit tests
 │   └── test_live.py               # Real hardware integration tests (--live)
 ├── hacs.json                      # HACS Marketplace repository configuration
-├── ROADMAP.md                     # Completed 6-phase roadmap
 └── pyproject.toml                 # uv project & packaging configuration
 ```
 

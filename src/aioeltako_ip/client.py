@@ -765,14 +765,17 @@ class EltakoClient:
         new_addons: list[AutomationAddOn] = [
             a for a in rule.add_ons if a.type != "offTimer"
         ]
-        if off_timer_ms is not None and off_timer_ms > 0:
-            new_addons.append(
-                AutomationAddOn(type="offTimer", time=int(off_timer_ms), data=None)
-            )
-        elif off_timer_ms is None:
-            existing_timer = rule.get_addon("offTimer")
-            if existing_timer is not None:
-                new_addons.append(existing_timer)
+        # buttonSwitch (bistable toggle on any edge) does not support offTimer on hardware
+        supports_off_timer = logic != "buttonSwitch"
+        if supports_off_timer:
+            if off_timer_ms is not None and off_timer_ms > 0:
+                new_addons.append(
+                    AutomationAddOn(type="offTimer", time=int(off_timer_ms), data=None)
+                )
+            elif off_timer_ms is None:
+                existing_timer = rule.get_addon("offTimer")
+                if existing_timer is not None:
+                    new_addons.append(existing_timer)
 
         updated = AutomationRule(
             automation_guid=rule.automation_guid,
@@ -786,4 +789,14 @@ class EltakoClient:
             add_ons=new_addons,
             logic_configuration=dict(rule.logic_configuration),
         )
-        return await self.update_automation(updated)
+        try:
+            return await self.update_automation(updated)
+        except EltakoError as err:
+            if "offTimer is not supported" in str(err) and any(
+                a.type == "offTimer" for a in updated.add_ons
+            ):
+                updated.add_ons = [
+                    a for a in updated.add_ons if a.type != "offTimer"
+                ]
+                return await self.update_automation(updated)
+            raise

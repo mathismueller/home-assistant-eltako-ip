@@ -58,7 +58,7 @@ class EltakoData:
     )
     automations: list[AutomationRule] = field(default_factory=list)
     products: dict[str, ProductSpec] = field(default_factory=dict)
-    matter_config: dict[str, Any] = field(default_factory=dict)
+    matter_supported: bool = True
 
     def get_matter_device(self, device_guid: str) -> Optional[MatterDevice]:
         """Return the MatterDevice entry if device_guid is exposed to Matter."""
@@ -105,6 +105,7 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
         self.client = client
         self.system_info = system_info
         self._products_cache: dict[str, ProductSpec] = {}
+        self.matter_supported: bool = True
 
         super().__init__(
             hass,
@@ -139,16 +140,13 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
                 eo_devices_map = {}
                 eo_config = {}
 
-            # Matter endpoints (graceful fallback for non-Matter -IP models)
-            matter_config: dict[str, Any] = {}
-            try:
-                matter_service = await self.client.get_matter_service()
-                matter_devs = matter_service.devices
-                matter_config = matter_service.configuration
-            except DeviceNotFoundError:
+            # Matter endpoints (cached skip for non-Matter Series 62 -IP models)
+            matter_devs: list[MatterDevice] = []
+            if self.matter_supported:
                 try:
                     matter_devs = await self.client.get_matter_devices()
                 except DeviceNotFoundError:
+                    self.matter_supported = False
                     matter_devs = []
 
             # Update config & firmware update info
@@ -182,7 +180,7 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
                 firmware_info=firmware_info,
                 automations=automations,
                 products=self._products_cache,
-                matter_config=matter_config,
+                matter_supported=self.matter_supported,
             )
         except AuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err

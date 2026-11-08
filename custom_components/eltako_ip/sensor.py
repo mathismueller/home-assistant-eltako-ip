@@ -133,9 +133,10 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = [
         EltakoFreeEurIdsSensor(coordinator),
-        EltakoMatterBridgedCountSensor(coordinator),
         EltakoAutomationsCountSensor(coordinator),
     ]
+    if coordinator.data.matter_supported:
+        entities.append(EltakoMatterBridgedCountSensor(coordinator))
 
     # Signal strength (RSSI) sensor for each paired EnOcean device
     for eo_dev in coordinator.data.enocean_devices.values():

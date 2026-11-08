@@ -298,6 +298,7 @@ async def test_automations_endpoints(
         m.put(
             f"{test_base_url}/services/eltako/automations/{auto_guid}",
             status=200,
+            repeat=True,
         )
         m.delete(
             f"{test_base_url}/services/eltako/automations/{auto_guid}",
@@ -313,7 +314,13 @@ async def test_automations_endpoints(
 
             assert (
                 await client.set_automation_logic(
-                    rule, logic="buttonSwitch", off_timer_ms=5000
+                    rule, logic="buttonNormallyOpened", off_timer_ms=5000
+                )
+                is True
+            )
+            assert (
+                await client.set_automation_logic(
+                    rule, logic="buttonSwitch"
                 )
                 is True
             )
