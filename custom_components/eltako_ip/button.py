@@ -8,8 +8,12 @@ from typing import Optional
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from aioeltako_ip import DeviceNotFoundError
+
+from .const import DOMAIN
 from .coordinator import EltakoConfigEntry, EltakoDataUpdateCoordinator
 from .entity import EltakoDeviceEntity, EltakoGatewayEntity, get_coordinator
 
@@ -106,15 +110,35 @@ class EltakoUnpairEnOceanDeviceButton(EltakoDeviceEntity, ButtonEntity):
         self._attr_name = "Unpair EnOcean Device"
 
     async def async_press(self) -> None:
-        """Delete the EnOcean device from the gateway."""
-        await self._async_execute(
-            self.coordinator.client.delete_enocean_device(
+        """Delete the EnOcean device from the gateway and remove its HA device."""
+        try:
+            await self.coordinator.client.delete_enocean_device(
                 self._service_device_guid,
-            ),
-            refresh=True,
-        )
+            )
+        except DeviceNotFoundError:
+            _LOGGER.debug(
+                "EnOcean device %s (service %s) was already removed from gateway",
+                self._device_guid,
+                self._service_device_guid,
+            )
+        except Exception as err:
+            await self._async_execute(self._raise_err(err), refresh=False)
+
+        if self.hass is not None:
+            dev_reg = dr.async_get(self.hass)
+            for ident in (self._device_guid, self._service_device_guid):
+                if ident:
+                    ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
+                    if ha_dev:
+                        dev_reg.async_remove_device(ha_dev.id)
+
+        await self.coordinator.async_request_refresh()
         _LOGGER.info(
             "Unpaired EnOcean device %s (service %s)",
             self._device_guid,
             self._service_device_guid,
         )
+
+    @staticmethod
+    async def _raise_err(err: Exception) -> None:
+        raise err

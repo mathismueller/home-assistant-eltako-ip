@@ -83,6 +83,14 @@ class EltakoDeviceEntity(EltakoBaseEntity):
         return self.coordinator.data.devices.get(self._device_guid)
 
     @property
+    def available(self) -> bool:
+        """Return True if the coordinator is available and the device still exists."""
+        return super().available and (
+            self._device_guid in self.coordinator.data.devices
+            or self._device_guid in self.coordinator.data.enocean_devices
+        )
+
+    @property
     def _is_gateway_local_device(self) -> bool:
         """Return True if this device is the primary local gateway/actuator."""
         if self._device_guid in self.coordinator.data.enocean_devices:

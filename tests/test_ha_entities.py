@@ -317,13 +317,34 @@ async def test_repeater_select_and_buttons(mock_coordinator):
     await id_button.async_press()
     mock_coordinator.client.identify.assert_called_once()
 
+    from unittest.mock import patch
+    from aioeltako_ip import DeviceNotFoundError
+
     unpair_button = EltakoUnpairEnOceanDeviceButton(
         mock_coordinator, "33333333-3333-3333-3333-333333333333"
     )
-    await unpair_button.async_press()
-    mock_coordinator.client.delete_enocean_device.assert_called_with(
-        "44444444-4444-4444-4444-444444444444"
+    unpair_button.hass = MagicMock()
+    mock_dev_reg = MagicMock()
+    mock_ha_dev = MagicMock()
+    mock_ha_dev.id = "ha_device_id_3333"
+    mock_dev_reg.async_get_device.side_effect = (
+        lambda identifiers: mock_ha_dev
+        if ("eltako_ip", "33333333-3333-3333-3333-333333333333") in identifiers
+        else None
     )
+
+    with patch("custom_components.eltako_ip.button.dr.async_get", return_value=mock_dev_reg):
+        await unpair_button.async_press()
+        mock_coordinator.client.delete_enocean_device.assert_called_with(
+            "44444444-4444-4444-4444-444444444444"
+        )
+        mock_dev_reg.async_remove_device.assert_called_once_with("ha_device_id_3333")
+
+        # Second press when already deleted on gateway (404) should not raise an error
+        mock_coordinator.client.delete_enocean_device.side_effect = DeviceNotFoundError(
+            "Endpoint or resource not found (404)"
+        )
+        await unpair_button.async_press()
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ try:
         AuthenticationError,
         AutomationAddOn,
         AutomationRule,
+        DeviceNotFoundError,
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
@@ -38,6 +39,7 @@ except ImportError:
         AuthenticationError,
         AutomationAddOn,
         AutomationRule,
+        DeviceNotFoundError,
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
@@ -227,18 +229,31 @@ def _async_register_services(hass: HomeAssistant) -> None:
             eo_dev = coord.data.enocean_devices.get(device_guid)
             if eo_dev:
                 service_device_guid = eo_dev.service_device_guid
+        elif service_device_guid and not device_guid:
+            for eo_dev in coord.data.enocean_devices.values():
+                if eo_dev.service_device_guid == service_device_guid:
+                    device_guid = eo_dev.device_guid
+                    break
 
         if not service_device_guid:
             raise HomeAssistantError(
                 "Must provide either service_device_guid or a valid EnOcean device_guid."
             )
 
-        await coord.client.delete_enocean_device(service_device_guid)
-        if device_guid:
-            dev_reg = dr.async_get(hass)
-            ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, device_guid)})
-            if ha_dev:
-                dev_reg.async_remove_device(ha_dev.id)
+        try:
+            await coord.client.delete_enocean_device(service_device_guid)
+        except DeviceNotFoundError:
+            _LOGGER.debug(
+                "EnOcean service device %s was already removed from gateway",
+                service_device_guid,
+            )
+
+        dev_reg = dr.async_get(hass)
+        for ident in (device_guid, service_device_guid):
+            if ident:
+                ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
+                if ha_dev:
+                    dev_reg.async_remove_device(ha_dev.id)
         await coord.async_request_refresh()
 
     async def handle_legacy_pair_enocean(call: ServiceCall) -> None:
@@ -548,6 +563,57 @@ def _async_register_services(hass: HomeAssistant) -> None:
             }
         ),
     )
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: EltakoConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Allow deleting paired EnOcean or stale child devices from Home Assistant UI."""
+    coordinator: Optional[EltakoDataUpdateCoordinator] = hass.data.get(
+        DOMAIN, {}
+    ).get(config_entry.entry_id) or getattr(config_entry, "runtime_data", None)
+    if coordinator is None:
+        return True
+
+    eltako_ids = {
+        ident_val
+        for domain, ident_val in device_entry.identifiers
+        if domain == DOMAIN
+    }
+
+    # Never allow deleting the primary gateway device
+    if coordinator.system_info.serial_number in eltako_ids:
+        return False
+
+    for ident in eltako_ids:
+        eo_dev = coordinator.data.enocean_devices.get(ident)
+        if eo_dev is None:
+            eo_dev = next(
+                (
+                    d
+                    for d in coordinator.data.enocean_devices.values()
+                    if d.service_device_guid == ident
+                ),
+                None,
+            )
+        if eo_dev is not None:
+            try:
+                await coordinator.client.delete_enocean_device(
+                    eo_dev.service_device_guid
+                )
+            except DeviceNotFoundError:
+                pass
+            await coordinator.async_request_refresh()
+            return True
+
+        # Prevent deleting active built-in hardware devices (like Wired Input)
+        if ident in coordinator.data.devices:
+            return False
+
+    # Allow deleting stale/orphaned devices no longer on the gateway
+    return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

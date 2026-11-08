@@ -10,6 +10,7 @@ from typing import Any, Optional
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -169,6 +170,8 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
             except EltakoError:
                 automations = []
 
+            self._async_cleanup_removed_devices(devices_map, eo_devices_map)
+
             return EltakoData(
                 system=self.system_info,
                 devices=devices_map,
@@ -186,3 +189,36 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except (EltakoConnectionError, EltakoError) as err:
             raise UpdateFailed(f"Error communicating with Eltako device: {err}") from err
+
+    def _async_cleanup_removed_devices(
+        self,
+        devices_map: dict[str, Device],
+        eo_devices_map: dict[str, EnOceanDevice],
+    ) -> None:
+        """Remove stale child devices from the Home Assistant Device Registry."""
+        if self.hass is None or self.config_entry is None:
+            return
+
+        active_ids: set[str] = {
+            self.system_info.serial_number,
+            *devices_map.keys(),
+            *eo_devices_map.keys(),
+            *(d.service_device_guid for d in eo_devices_map.values() if d.service_device_guid),
+        }
+
+        dev_reg = dr.async_get(self.hass)
+        for device_entry in dr.async_entries_for_config_entry(
+            dev_reg, self.config_entry.entry_id
+        ):
+            eltako_ids = {
+                ident_val
+                for domain, ident_val in device_entry.identifiers
+                if domain == DOMAIN
+            }
+            if eltako_ids and eltako_ids.isdisjoint(active_ids):
+                _LOGGER.info(
+                    "Removing unpaired/stale Eltako device %s (%s) from Device Registry",
+                    device_entry.name,
+                    eltako_ids,
+                )
+                dev_reg.async_remove_device(device_entry.id)
