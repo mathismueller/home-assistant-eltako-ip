@@ -11,7 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from aioeltako_ip import Device, EltakoConnectionError, EltakoError
 
-from .const import DOMAIN, LOCAL_WIRED_INPUT_PRODUCTS
+from .const import DOMAIN
 from .coordinator import EltakoConfigEntry, EltakoDataUpdateCoordinator
 
 
@@ -84,20 +84,17 @@ class EltakoDeviceEntity(EltakoBaseEntity):
 
     @property
     def _is_gateway_local_device(self) -> bool:
-        """Return True if this device is part of the local physical gateway unit."""
+        """Return True if this device is the primary local gateway/actuator."""
         if self._device_guid in self.coordinator.data.enocean_devices:
             return False
         dev = self._device
         if dev is None:
             return False
-        return (
-            dev.product_guid == self.coordinator.system_info.product_guid
-            or dev.product_guid in LOCAL_WIRED_INPUT_PRODUCTS
-        )
+        return dev.product_guid == self.coordinator.system_info.product_guid
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return unified DeviceInfo for either the local gateway or a child EnOcean device."""
+        """Return DeviceInfo for either the local gateway or a child device."""
         sys_info = self.coordinator.system_info
         dev = self._device
 
@@ -123,11 +120,11 @@ class EltakoDeviceEntity(EltakoBaseEntity):
                 hw_version=sys_info.hardware_version,
             )
 
-        name = dev.display_name if (dev and dev.display_name) else "Eltako Sensor"
+        name = dev.display_name if (dev and dev.display_name) else "Eltako Device"
         model = (
-            self.coordinator.data.get_product_name(dev.product_guid, "EnOcean Device")
+            self.coordinator.data.get_product_name(dev.product_guid, "Eltako Device")
             if dev
-            else "EnOcean Device"
+            else "Eltako Device"
         )
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_guid)},

@@ -263,6 +263,12 @@ def test_binary_sensors(mock_coordinator):
     )
     assert wired_in.is_on is True
     assert wired_in.device_class == BinarySensorDeviceClass.OPENING
+    assert wired_in.device_info["identifiers"] == {
+        ("eltako_ip", "22222222-2222-2222-2222-222222222222")
+    }
+    assert wired_in.device_info["name"] == "ELTAKO-Wired input"
+    assert wired_in.device_info["model"] == "Wired Input"
+    assert wired_in.device_info["via_device"] == ("eltako_ip", "ELTAKO-0000000000")
 
 
 def test_diagnostic_and_characteristic_sensors(mock_coordinator):
