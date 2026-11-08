@@ -19,6 +19,12 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -29,6 +35,8 @@ try:
         EltakoConnectionError,
         EltakoError,
         EnOceanScanResultItem,
+        format_eur_id_hex,
+        parse_eur_id,
     )
     from aioeltako_ip.client import normalize_host
 except ImportError:
@@ -45,6 +53,8 @@ except ImportError:
         EltakoConnectionError,
         EltakoError,
         EnOceanScanResultItem,
+        format_eur_id_hex,
+        parse_eur_id,
     )
     from aioeltako_ip.client import normalize_host  # type: ignore[no-redef]
 
@@ -56,6 +66,17 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    LOCAL_WIRED_INPUT_PRODUCTS,
+    PRODUCT_E2SR64NP_IPM,
+    PRODUCT_ESB62NP_IP,
+    PRODUCT_ESB64NP_IPM,
+    PRODUCT_ESR62NP_IP,
+    PRODUCT_ESR62PF_IP,
+    PRODUCT_ESR64NP_IPM,
+    PRODUCT_ESR64PF_IPM,
+    PRODUCT_EUD62NPN_IP,
+    PRODUCT_EUD62NPN_IPM,
+    PRODUCT_EUD64NPN_IPM,
     PRODUCT_FSB61,
     PRODUCT_FSR61,
     PRODUCT_FTK_CONTACT,
@@ -498,33 +519,55 @@ class EltakoOptionsFlowHandler(OptionsFlow):
     async def async_step_pair_enocean(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Interactive EnOcean sensor pairing wizard."""
+        """Interactive EnOcean sensor pairing wizard (supports radio scan + hex sticker ID entry)."""
         errors: dict[str, str] = {}
         coord = self._get_coordinator()
 
         if user_input is not None:
+            eur_id_raw = str(user_input.get("eur_id") or "").strip()
+            product_guid = user_input.get("product_guid", PRODUCT_FTK_CONTACT)
+            display_name = user_input.get("display_name", "").strip()
+
             if user_input.get("rescan"):
                 if coord:
                     try:
-                        await coord.client.start_enocean_scan()
+                        # First check if telegrams were captured during the active scan window
+                        scan_res = await coord.client.get_enocean_scan_results()
+                        self._scan_results = scan_res
+                        if not scan_res:
+                            # Restart 60s scan if nothing was captured yet
+                            await coord.client.start_enocean_scan()
                     except EltakoError:
                         errors["base"] = "cannot_connect"
-            else:
-                eur_id_raw = user_input.get("eur_id")
-                product_guid = user_input.get("product_guid", PRODUCT_FTK_CONTACT)
-                display_name = user_input.get("display_name", "").strip()
-                if not eur_id_raw:
+            elif not eur_id_raw:
+                # If submitted empty, check if a sensor was discovered in the scan
+                if coord:
+                    try:
+                        self._scan_results = await coord.client.get_enocean_scan_results()
+                    except EltakoError:
+                        pass
+                if not self._scan_results:
                     errors["base"] = "no_device_selected"
-                elif coord:
+            elif coord:
+                try:
+                    parsed_eur_id = parse_eur_id(eur_id_raw, prefer_hex=True)
+                except ValueError:
+                    errors["base"] = "invalid_eur_id"
+                else:
                     try:
                         resp = await coord.client.pair_enocean_device(
-                            eur_id=int(eur_id_raw),
+                            eur_id=parsed_eur_id,
                             product_guid=str(product_guid),
                         )
                         device_guid = resp.get("deviceGuid")
                         if display_name and device_guid:
                             await coord.client.rename_device(device_guid, display_name)
                         await coord.async_request_refresh()
+                        self.hass.async_create_task(
+                            self.hass.config_entries.async_reload(
+                                self.config_entry.entry_id
+                            )
+                        )
                         return self.async_create_entry(
                             title="",
                             data=self._pending_options or dict(self.config_entry.options),
@@ -532,45 +575,94 @@ class EltakoOptionsFlowHandler(OptionsFlow):
                     except EltakoError:
                         errors["base"] = "pairing_failed"
 
-        # Poll scan results from device
-        discovered_options: dict[str, str] = {}
+        # Exclude local IP actuators and wired inputs from EnOcean profile selector
+        local_non_enocean_guids = {
+            PRODUCT_ESR64PF_IPM,
+            PRODUCT_ESR64NP_IPM,
+            PRODUCT_ESR62NP_IP,
+            PRODUCT_ESR62PF_IP,
+            PRODUCT_E2SR64NP_IPM,
+            PRODUCT_EUD64NPN_IPM,
+            PRODUCT_EUD62NPN_IP,
+            PRODUCT_EUD62NPN_IPM,
+            PRODUCT_ESB64NP_IPM,
+            PRODUCT_ESB62NP_IP,
+            *LOCAL_WIRED_INPUT_PRODUCTS,
+        }
+
         product_options: dict[str, str] = {
-            PRODUCT_FTK_CONTACT: PRODUCT_NAMES_FALLBACK[PRODUCT_FTK_CONTACT],
+            PRODUCT_FTK_CONTACT: "FTK — Solar Window/Door Contact Sensor",
+            "92ec3705-e209-4117-9efb-e0cfb2d116bb": "FTKB — Battery Window/Door Contact Sensor",
+            "541d4e82-5904-4a39-abd8-c5f57f9bbdee": "FTKE — Window/Door Contact Sensor",
+            "07f73245-b035-40ad-a403-f8581f067ef6": "FFG7B — Window Handle Sensor",
+            "067272d3-60f8-4618-bc2f-0145e99b1f0b": "F2T55E / FT55 — Wireless Rocker Pushbutton",
             PRODUCT_FSR61: PRODUCT_NAMES_FALLBACK[PRODUCT_FSR61],
             PRODUCT_FUD61: PRODUCT_NAMES_FALLBACK[PRODUCT_FUD61],
             PRODUCT_FSB61: PRODUCT_NAMES_FALLBACK[PRODUCT_FSB61],
         }
+
+        discovered_select_options: list[SelectOptionDict] = []
+        default_eur = ""
+        default_product = (
+            user_input.get("product_guid", PRODUCT_FTK_CONTACT)
+            if user_input
+            else PRODUCT_FTK_CONTACT
+        )
+
         if coord:
             for p_guid, p_spec in coord.data.products.items():
-                if p_spec.name:
-                    product_options[p_guid] = f"{p_spec.name} ({p_guid[:8]})"
+                if (
+                    p_spec.name
+                    and p_guid not in local_non_enocean_guids
+                    and p_guid not in product_options
+                ):
+                    product_options[p_guid] = p_spec.name
+
             try:
                 scan_res = await coord.client.get_enocean_scan_results()
                 self._scan_results = scan_res
                 for item in scan_res:
+                    hex_id = format_eur_id_hex(item.eur_id)
                     prod_label = (
-                        coord.data.get_product_name(item.product_guid, "EnOcean Sensor")
+                        coord.data.get_product_name(item.product_guid, "EnOcean Device")
                         if item.product_guid
-                        else "EnOcean Sensor"
+                        else "EnOcean Device"
                     )
-                    discovered_options[str(item.eur_id)] = (
-                        f"{prod_label} — EURID {item.eur_id} ({item.signal_strength} dBm)"
+                    rssi_str = (
+                        f"{item.signal_strength} dBm"
+                        if item.signal_strength is not None
+                        else "discovered"
                     )
+                    discovered_select_options.append(
+                        SelectOptionDict(
+                            value=hex_id,
+                            label=f"{prod_label} — ID {hex_id} ({rssi_str})",
+                        )
+                    )
+                if scan_res:
+                    default_eur = format_eur_id_hex(scan_res[0].eur_id)
+                    if (
+                        scan_res[0].product_guid
+                        and scan_res[0].product_guid in product_options
+                        and (not user_input or not user_input.get("product_guid"))
+                    ):
+                        default_product = scan_res[0].product_guid
             except EltakoError:
                 _LOGGER.debug("Could not fetch EnOcean scan results")
 
-        if discovered_options:
-            default_eur = next(iter(discovered_options.keys()))
-            eur_field: Any = vol.In(discovered_options)
-        else:
-            default_eur = ""
-            eur_field = str
+        eur_selector = SelectSelector(
+            SelectSelectorConfig(
+                options=discovered_select_options,
+                custom_value=True,
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
 
         schema = vol.Schema(
             {
-                vol.Optional("eur_id", default=default_eur): eur_field,
+                vol.Optional("eur_id", default=default_eur): eur_selector,
                 vol.Optional(
-                    "product_guid", default=PRODUCT_FTK_CONTACT
+                    "product_guid", default=default_product
                 ): vol.In(product_options),
                 vol.Optional("display_name", default=""): str,
                 vol.Optional("rescan", default=False): bool,

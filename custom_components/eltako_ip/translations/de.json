@@ -61,12 +61,12 @@
       },
       "pair_enocean": {
         "title": "EnOcean-Sensor einlernen",
-        "description": "Lösen Sie jetzt Ihren EnOcean-Sensor aus und wählen Sie anschließend die gefundene EURID und das Produktprofil aus.",
+        "description": "Geben Sie die hexadezimale Geräte-ID auf der Rückseite des Sensors ein (z. B. 5AA986C) oder lösen Sie den Sensor aus und aktivieren Sie 'Scan-Ergebnisse aktualisieren'.",
         "data": {
-          "eur_id": "Gefundenes EnOcean-Gerät (EURID)",
-          "product_guid": "Produktprofil",
+          "eur_id": "EnOcean Geräte-ID (Hex-Aufkleber-ID oder gefundener Sensor)",
+          "product_guid": "Produktprofil (z. B. FTK für Fenster-/Türkontakt)",
           "display_name": "Anzeigename (optional)",
-          "rescan": "60s Funk-Scan neu starten"
+          "rescan": "Scan-Ergebnisse aktualisieren / 60s Scan neu starten"
         }
       },
       "legacy_pair_enocean": {
@@ -80,7 +80,8 @@
     },
     "error": {
       "cannot_connect": "Kommunikation mit dem Eltako-Gateway fehlgeschlagen.",
-      "no_device_selected": "Bitte wählen oder geben Sie eine EnOcean-EURID zum Einlernen ein.",
+      "no_device_selected": "Bitte wählen Sie einen gefundenen Sensor aus oder geben Sie dessen hexadezimale Geräte-ID ein (z. B. 5AA986C).",
+      "invalid_eur_id": "Ungültige EnOcean Geräte-ID. Bitte geben Sie die 7- bis 8-stellige Hex-ID vom Aufkleber ein (z. B. 5AA986C).",
       "pairing_failed": "Das EnOcean-Einlernen am Gateway ist fehlgeschlagen."
     }
   }

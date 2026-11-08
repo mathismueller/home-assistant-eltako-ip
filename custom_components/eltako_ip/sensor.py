@@ -11,8 +11,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_BILLION,
-    CONCENTRATION_PARTS_PER_MILLION,
     EntityCategory,
     LIGHT_LUX,
     PERCENTAGE,
@@ -20,6 +18,7 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfEnergy,
     UnitOfPower,
+    UnitOfRatio,
     UnitOfSpeed,
     UnitOfTemperature,
 )
@@ -85,13 +84,13 @@ SENSOR_CHAR_META: dict[str, dict[str, Any]] = {
         "name": "Carbon Dioxide",
         "device_class": SensorDeviceClass.CO2,
         "state_class": SensorStateClass.MEASUREMENT,
-        "unit": CONCENTRATION_PARTS_PER_MILLION,
+        "unit": UnitOfRatio.PARTS_PER_MILLION,
     },
     "tvoc": {
         "name": "Volatile Organic Compounds",
         "device_class": SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
         "state_class": SensorStateClass.MEASUREMENT,
-        "unit": CONCENTRATION_PARTS_PER_BILLION,
+        "unit": UnitOfRatio.PARTS_PER_BILLION,
     },
     "batteryPercentageRemaining": {
         "name": "Battery",

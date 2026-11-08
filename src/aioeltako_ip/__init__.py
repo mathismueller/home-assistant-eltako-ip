@@ -24,6 +24,8 @@ from .models import (
     ProductSpec,
     SystemInfo,
     UpdateConfig,
+    format_eur_id_hex,
+    parse_eur_id,
 )
 
 __all__ = [
@@ -48,4 +50,6 @@ __all__ = [
     "ProductSpec",
     "SystemInfo",
     "UpdateConfig",
+    "format_eur_id_hex",
+    "parse_eur_id",
 ]

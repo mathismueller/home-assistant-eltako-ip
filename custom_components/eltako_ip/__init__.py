@@ -26,6 +26,7 @@ try:
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
+        parse_eur_id,
     )
 except ImportError:
     for _candidate in (
@@ -43,6 +44,7 @@ except ImportError:
         EltakoClient,
         EltakoConnectionError,
         EltakoError,
+        parse_eur_id,
     )
 
 from .const import (
@@ -207,7 +209,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def handle_pair_enocean_device(call: ServiceCall) -> None:
         """Pair an EnOcean sensor."""
         coord = _resolve_coordinator(hass, call)
-        eur_id = int(call.data["eur_id"])
+        try:
+            eur_id = parse_eur_id(call.data["eur_id"], prefer_hex=True)
+        except ValueError as err:
+            raise HomeAssistantError(f"Invalid EnOcean EURID: {err}") from err
         product_guid = str(call.data["product_guid"])
         display_name = call.data.get("display_name")
         resp = await coord.client.pair_enocean_device(
@@ -217,7 +222,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         if display_name and device_guid:
             await coord.client.rename_device(device_guid, display_name)
         await coord.async_request_refresh()
-        _LOGGER.info("Paired EnOcean sensor EURID %s", eur_id)
+        if coord.config_entry:
+            await hass.config_entries.async_reload(coord.config_entry.entry_id)
+        _LOGGER.info("Paired EnOcean sensor EURID %s (0x%08X)", eur_id, eur_id)
 
     async def handle_unpair_enocean_device(call: ServiceCall) -> None:
         """Unpair an EnOcean device and remove it from the device registry."""
@@ -410,7 +417,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 vol.Optional("entry_id"): cv.string,
-                vol.Required("eur_id"): cv.positive_int,
+                vol.Required("eur_id"): vol.Any(cv.positive_int, cv.string),
                 vol.Required("product_guid"): cv.string,
                 vol.Optional("display_name"): cv.string,
             }

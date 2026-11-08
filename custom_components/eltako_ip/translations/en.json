@@ -61,12 +61,12 @@
       },
       "pair_enocean": {
         "title": "Pair EnOcean Sensor",
-        "description": "Trigger your EnOcean sensor now, then select its discovered EURID and product profile below.",
+        "description": "Enter the hexadecimal Device ID printed on the back of your sensor (e.g., 5AA986C), or trigger the sensor and check 'Refresh Scan Results' to select a discovered radio telegram.",
         "data": {
-          "eur_id": "Discovered EnOcean Device (EURID)",
-          "product_guid": "Product Profile",
+          "eur_id": "EnOcean Device ID (Hex Sticker ID or Discovered Sensor)",
+          "product_guid": "Product Profile (e.g., FTK for Window/Door Contact)",
           "display_name": "Display Name (optional)",
-          "rescan": "Restart 60s Radio Scan"
+          "rescan": "Refresh Scan Results / Restart 60s Scan"
         }
       },
       "legacy_pair_enocean": {
@@ -80,7 +80,8 @@
     },
     "error": {
       "cannot_connect": "Failed to communicate with the Eltako gateway.",
-      "no_device_selected": "Please select or enter an EnOcean EURID to pair.",
+      "no_device_selected": "Please select a discovered sensor or enter its hexadecimal Device ID (e.g., 5AA986C).",
+      "invalid_eur_id": "Invalid EnOcean Device ID. Enter the 7-8 character hexadecimal ID from the device sticker (e.g., 5AA986C).",
       "pairing_failed": "EnOcean pairing failed on the gateway."
     }
   }

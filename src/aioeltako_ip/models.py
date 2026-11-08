@@ -179,6 +179,30 @@ class ProductSpec:
         ]
 
 
+def format_eur_id_hex(eur_id: int) -> str:
+    """Format a 32-bit EnOcean EURID integer as an 8-character uppercase hex string."""
+    return f"{int(eur_id) & 0xFFFFFFFF:08X}"
+
+
+def parse_eur_id(value: int | str, *, prefer_hex: bool = False) -> int:
+    """Parse an EnOcean EURID from either a hex sticker ID (e.g. '5AA986C', '05:AA:98:6C') or integer."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raw = str(value).strip()
+    if not raw:
+        raise ValueError("Empty EnOcean EURID")
+    if raw.lower().startswith("dec:"):
+        return int(raw[4:].strip(), 10)
+    cleaned = raw.replace(":", "").replace("-", "").replace(" ", "").replace("_", "")
+    if cleaned.lower().startswith("0x"):
+        return int(cleaned, 16)
+    has_hex_alpha = any(c in "abcdefABCDEF" for c in cleaned)
+    has_leading_zero = len(cleaned) > 1 and cleaned.startswith("0")
+    if has_hex_alpha or has_leading_zero or (prefer_hex and len(cleaned) in (7, 8)):
+        return int(cleaned, 16)
+    return int(cleaned, 10)
+
+
 @dataclass
 class EnOceanDevice:
     """Paired EnOcean service device."""
@@ -312,6 +336,12 @@ class MatterDevice:
     device_guid: str
     endpoint_id: int = 0
     config: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def channels(self) -> list[dict[str, Any]]:
+        """Return the list of Matter channel configurations."""
+        ch = self.config.get("channels")
+        return list(ch) if isinstance(ch, list) else []
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MatterDevice:

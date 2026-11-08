@@ -325,3 +325,70 @@ async def test_automations_endpoints(
                 is True
             )
             assert await client.delete_automation(auto_guid) is True
+
+
+def test_parse_and_format_eur_id():
+    from aioeltako_ip import format_eur_id_hex, parse_eur_id
+
+    # Sticker hex ID (e.g. 5AA986C -> 0x05AA986C = 95066220)
+    assert parse_eur_id("5AA986C") == 95066220
+    assert parse_eur_id("05:AA:98:6C") == 95066220
+    assert parse_eur_id("0x05AA986C") == 95066220
+    assert format_eur_id_hex(95066220) == "05AA986C"
+
+    # 8-digit hex string consisting of digits only when prefer_hex=True vs False
+    assert parse_eur_id("05123456", prefer_hex=True) == 0x05123456
+    assert parse_eur_id(95066220) == 95066220
+    assert parse_eur_id("95066220", prefer_hex=False) == 95066220
+
+
+@pytest.mark.asyncio
+async def test_pair_enocean_hex_and_expose_matter_auto_enable(
+    test_base_url: str, test_host: str, test_pop: str
+):
+    login_data = load_fixture("login")
+    svc_guid = "161a45a3-2aea-4fd6-9f32-269720eb63bf"
+    dev_guid = "53b353b4-3fa6-4ac5-a5df-271cd336b279"
+    ftk_prod = "791a7c28-22e3-4fab-8ecc-0084e15396c5"
+
+    with aioresponses() as m:
+        m.post(f"{test_base_url}/login", payload=login_data)
+        m.post(
+            f"{test_base_url}/services/enocean/devices",
+            payload={
+                "serviceDeviceGuid": "2b770fd5-c5cb-4c11-b62c-5128a1d78f94",
+                "productGuid": ftk_prod,
+                "deviceGuid": dev_guid,
+                "config": {"orientation": 0},
+            },
+        )
+        m.post(
+            f"{test_base_url}/services/matter/devices",
+            payload={
+                "serviceDeviceGuid": svc_guid,
+                "productGuid": ftk_prod,
+                "deviceGuid": dev_guid,
+                "config": {
+                    "channels": [
+                        {
+                            "identifier": "contact",
+                            "enabled": False,
+                            "endpointId": None,
+                        }
+                    ]
+                },
+            },
+        )
+        m.put(
+            f"{test_base_url}/services/matter/devices/{svc_guid}/config",
+            status=202,
+            payload={},
+        )
+
+        async with EltakoClient(test_host, pop=test_pop) as client:
+            paired = await client.pair_enocean_device("5AA986C", ftk_prod)
+            assert paired["deviceGuid"] == dev_guid
+
+            exposed = await client.expose_matter_device(ftk_prod, dev_guid)
+            assert exposed.service_device_guid == svc_guid
+            assert exposed.channels[0]["enabled"] is True

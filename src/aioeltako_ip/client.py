@@ -30,6 +30,7 @@ from .models import (
     ProductSpec,
     SystemInfo,
     UpdateConfig,
+    parse_eur_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -435,20 +436,21 @@ class EltakoClient:
 
     async def pair_enocean_device(
         self,
-        eur_id: int,
+        eur_id: int | str,
         product_guid: str,
         bridge_direction: str = "ingress",
         device_guid: str = "",
     ) -> dict[str, Any]:
         """Pair an EnOcean sensor to the device registry."""
+        parsed_id = parse_eur_id(eur_id)
         payload = {
-            "eurId": int(eur_id),
+            "eurId": parsed_id,
             "productGuid": product_guid,
             "bridgeDirection": bridge_direction,
             "deviceGuid": device_guid,
         }
         data = await self._request("POST", "/services/enocean/devices", json=payload)
-        return data if isinstance(data, dict) else {"eurId": eur_id, "productGuid": product_guid}
+        return data if isinstance(data, dict) else {"eurId": parsed_id, "productGuid": product_guid}
 
     async def delete_enocean_device(
         self,
@@ -603,7 +605,34 @@ class EltakoClient:
             payload["config"] = config
         data = await self._request("POST", "/services/matter/devices", json=payload)
         if isinstance(data, dict) and "serviceDeviceGuid" in data:
-            return MatterDevice.from_dict(data)
+            m_dev = MatterDevice.from_dict(data)
+            # Some device types (e.g. FTK contact sensor) are created with channels disabled
+            # when config is omitted; automatically enable primary channels so Matter exposes entities.
+            if (
+                config is None
+                and m_dev.service_device_guid
+                and m_dev.channels
+                and all(not ch.get("enabled") for ch in m_dev.channels)
+            ):
+                enabled_channels: list[dict[str, Any]] = []
+                for ch in m_dev.channels:
+                    ch_copy = dict(ch)
+                    if ch_copy.get("identifier") != "inputBridged" or len(m_dev.channels) == 1:
+                        ch_copy["enabled"] = True
+                    enabled_channels.append(ch_copy)
+                try:
+                    await self.update_matter_device_config(
+                        m_dev.service_device_guid,
+                        {"channels": enabled_channels},
+                    )
+                    m_dev.config["channels"] = enabled_channels
+                except EltakoError as err:
+                    _LOGGER.debug(
+                        "Could not auto-enable Matter channels on %s: %s",
+                        m_dev.service_device_guid,
+                        err,
+                    )
+            return m_dev
         return MatterDevice(
             service_device_guid="",
             product_guid=product_guid,
