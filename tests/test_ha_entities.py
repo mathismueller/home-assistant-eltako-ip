@@ -211,6 +211,7 @@ def mock_coordinator():
     coordinator.client.set_enocean_device_config = AsyncMock(return_value=True)
     coordinator.client.start_enocean_scan = AsyncMock()
     coordinator.client.delete_enocean_device = AsyncMock(return_value=True)
+    coordinator.client.delete_device = AsyncMock(return_value=True)
     coordinator.client.identify = AsyncMock(return_value=True)
     coordinator.client.expose_matter_device = AsyncMock(return_value={})
     coordinator.client.remove_matter_device = AsyncMock(return_value=True)
@@ -337,6 +338,9 @@ async def test_repeater_select_and_buttons(mock_coordinator):
         await unpair_button.async_press()
         mock_coordinator.client.delete_enocean_device.assert_called_with(
             "44444444-4444-4444-4444-444444444444"
+        )
+        mock_coordinator.client.delete_device.assert_called_with(
+            "33333333-3333-3333-3333-333333333333"
         )
         mock_dev_reg.async_remove_device.assert_called_once_with("ha_device_id_3333")
 

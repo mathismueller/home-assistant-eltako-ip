@@ -110,19 +110,38 @@ class EltakoUnpairEnOceanDeviceButton(EltakoDeviceEntity, ButtonEntity):
         self._attr_name = "Unpair EnOcean Device"
 
     async def async_press(self) -> None:
-        """Delete the EnOcean device from the gateway and remove its HA device."""
+        """Delete the EnOcean device across EnOcean service, Matter bridge, /devices, and HA Device Registry."""
         try:
             await self.coordinator.client.delete_enocean_device(
                 self._service_device_guid,
             )
         except DeviceNotFoundError:
             _LOGGER.debug(
-                "EnOcean device %s (service %s) was already removed from gateway",
+                "EnOcean device %s (service %s) was already removed from EnOcean service",
                 self._device_guid,
                 self._service_device_guid,
             )
         except Exception as err:
             await self._async_execute(self._raise_err(err), refresh=False)
+
+        if self._device_guid and getattr(self.coordinator, "data", None) is not None:
+            for m_dev in self.coordinator.data.matter_devices:
+                if (
+                    m_dev.device_guid == self._device_guid
+                    and m_dev.service_device_guid
+                ):
+                    try:
+                        await self.coordinator.client.remove_matter_device(
+                            m_dev.service_device_guid,
+                        )
+                    except DeviceNotFoundError:
+                        pass
+
+        if self._device_guid and hasattr(self.coordinator.client, "delete_device"):
+            try:
+                await self.coordinator.client.delete_device(self._device_guid)
+            except DeviceNotFoundError:
+                pass
 
         if self.hass is not None:
             dev_reg = dr.async_get(self.hass)

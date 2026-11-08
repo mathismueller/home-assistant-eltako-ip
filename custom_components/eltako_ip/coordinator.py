@@ -33,7 +33,7 @@ from aioeltako_ip import (
     UpdateConfig,
 )
 
-from .const import DOMAIN, PRODUCT_NAMES_FALLBACK
+from .const import DOMAIN, LOCAL_WIRED_INPUT_PRODUCTS, PRODUCT_NAMES_FALLBACK
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -170,6 +170,47 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
             except EltakoError:
                 automations = []
 
+            # Clean up any half-deleted/orphaned EnOcean devices still lingering in /devices or /services/matter/devices
+            local_product_guids = {
+                self.system_info.product_guid,
+                *LOCAL_WIRED_INPUT_PRODUCTS,
+            }
+            orphan_guids = [
+                guid
+                for guid, dev in devices_map.items()
+                if dev.product_guid not in local_product_guids
+                and guid not in eo_devices_map
+            ]
+            for orphan_guid in orphan_guids:
+                _LOGGER.info(
+                    "Cleaning up orphaned EnOcean device %s from /devices and /services/matter/devices",
+                    orphan_guid,
+                )
+                for m_dev in list(matter_devs):
+                    if m_dev.device_guid == orphan_guid and m_dev.service_device_guid:
+                        try:
+                            await self.client.remove_matter_device(
+                                m_dev.service_device_guid
+                            )
+                        except EltakoError:
+                            pass
+                        matter_devs.remove(m_dev)
+                for rule in list(automations):
+                    if orphan_guid in (
+                        rule.input_device_guid,
+                        rule.output_device_guid,
+                    ) and rule.automation_guid:
+                        try:
+                            await self.client.delete_automation(rule.automation_guid)
+                        except EltakoError:
+                            pass
+                        automations.remove(rule)
+                try:
+                    await self.client.delete_device(orphan_guid)
+                except EltakoError:
+                    pass
+                devices_map.pop(orphan_guid, None)
+
             self._async_cleanup_removed_devices(devices_map, eo_devices_map)
 
             return EltakoData(
@@ -189,6 +230,74 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except (EltakoConnectionError, EltakoError) as err:
             raise UpdateFailed(f"Error communicating with Eltako device: {err}") from err
+
+    async def async_unpair_enocean_device(
+        self,
+        device_guid: Optional[str] = None,
+        service_device_guid: Optional[str] = None,
+    ) -> None:
+        """Completely unpair an EnOcean device across EnOcean service, Matter bridge, automations, /devices, and HA Device Registry."""
+        if self.data is not None:
+            if not service_device_guid and device_guid:
+                eo_dev = self.data.enocean_devices.get(device_guid)
+                if eo_dev:
+                    service_device_guid = eo_dev.service_device_guid
+            elif service_device_guid and not device_guid:
+                for eo_dev in self.data.enocean_devices.values():
+                    if eo_dev.service_device_guid == service_device_guid:
+                        device_guid = eo_dev.device_guid
+                        break
+
+        # 1. Unlink from EnOcean service (/services/enocean/devices/{serviceDeviceGuid})
+        if service_device_guid:
+            try:
+                await self.client.delete_enocean_device(service_device_guid)
+            except DeviceNotFoundError:
+                _LOGGER.debug(
+                    "EnOcean service device %s was already deleted",
+                    service_device_guid,
+                )
+
+        # 2. Unlink from Matter service (/services/matter/devices/{serviceDeviceGuid}) if exposed
+        if device_guid and self.data is not None:
+            for m_dev in self.data.matter_devices:
+                if m_dev.device_guid == device_guid and m_dev.service_device_guid:
+                    try:
+                        await self.client.remove_matter_device(
+                            m_dev.service_device_guid
+                        )
+                    except DeviceNotFoundError:
+                        pass
+
+            # 3. Delete any on-device automations referencing this device
+            for rule in self.data.automations:
+                if (
+                    device_guid in (rule.input_device_guid, rule.output_device_guid)
+                    and rule.automation_guid
+                ):
+                    try:
+                        await self.client.delete_automation(rule.automation_guid)
+                    except DeviceNotFoundError:
+                        pass
+
+        # 4. Delete logical device (/devices/{deviceGuid})
+        if device_guid:
+            try:
+                await self.client.delete_device(device_guid)
+            except DeviceNotFoundError:
+                _LOGGER.debug(
+                    "Logical device %s was already deleted from /devices",
+                    device_guid,
+                )
+
+        # 5. Remove from Home Assistant Device Registry
+        if self.hass is not None:
+            dev_reg = dr.async_get(self.hass)
+            for ident in (device_guid, service_device_guid):
+                if ident:
+                    ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
+                    if ha_dev:
+                        dev_reg.async_remove_device(ha_dev.id)
 
     def _async_cleanup_removed_devices(
         self,

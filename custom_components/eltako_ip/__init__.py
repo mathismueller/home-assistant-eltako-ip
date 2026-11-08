@@ -225,35 +225,15 @@ def _async_register_services(hass: HomeAssistant) -> None:
         service_device_guid = call.data.get("service_device_guid")
         device_guid = call.data.get("device_guid")
 
-        if not service_device_guid and device_guid:
-            eo_dev = coord.data.enocean_devices.get(device_guid)
-            if eo_dev:
-                service_device_guid = eo_dev.service_device_guid
-        elif service_device_guid and not device_guid:
-            for eo_dev in coord.data.enocean_devices.values():
-                if eo_dev.service_device_guid == service_device_guid:
-                    device_guid = eo_dev.device_guid
-                    break
-
-        if not service_device_guid:
+        if not service_device_guid and not device_guid:
             raise HomeAssistantError(
                 "Must provide either service_device_guid or a valid EnOcean device_guid."
             )
 
-        try:
-            await coord.client.delete_enocean_device(service_device_guid)
-        except DeviceNotFoundError:
-            _LOGGER.debug(
-                "EnOcean service device %s was already removed from gateway",
-                service_device_guid,
-            )
-
-        dev_reg = dr.async_get(hass)
-        for ident in (device_guid, service_device_guid):
-            if ident:
-                ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
-                if ha_dev:
-                    dev_reg.async_remove_device(ha_dev.id)
+        await coord.async_unpair_enocean_device(
+            device_guid=device_guid,
+            service_device_guid=service_device_guid,
+        )
         await coord.async_request_refresh()
 
     async def handle_legacy_pair_enocean(call: ServiceCall) -> None:
@@ -599,12 +579,10 @@ async def async_remove_config_entry_device(
                 None,
             )
         if eo_dev is not None:
-            try:
-                await coordinator.client.delete_enocean_device(
-                    eo_dev.service_device_guid
-                )
-            except DeviceNotFoundError:
-                pass
+            await coordinator.async_unpair_enocean_device(
+                device_guid=eo_dev.device_guid,
+                service_device_guid=eo_dev.service_device_guid,
+            )
             await coordinator.async_request_refresh()
             return True
 
