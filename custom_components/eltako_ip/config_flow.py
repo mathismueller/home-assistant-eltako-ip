@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from pathlib import Path
 import sys
@@ -29,6 +30,7 @@ try:
         EltakoError,
         EnOceanScanResultItem,
     )
+    from aioeltako_ip.client import normalize_host
 except ImportError:
     for _candidate in (
         Path(__file__).resolve().parent.parent.parent / "src",
@@ -44,6 +46,7 @@ except ImportError:
         EltakoError,
         EnOceanScanResultItem,
     )
+    from aioeltako_ip.client import normalize_host  # type: ignore[no-redef]
 
 from .const import (
     CONF_HOST,
@@ -87,11 +90,41 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered_serial: Optional[str] = None
         self._discovered_model: Optional[str] = None
 
+    def _build_discovery_host_updates(
+        self,
+        serial: str,
+        discovered_ip: str,
+        port: Optional[int] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Build host/port updates for an existing entry without overwriting user-configured hostnames."""
+        entries = (
+            self.hass.config_entries.async_entries(DOMAIN)
+            if self.hass and hasattr(self.hass, "config_entries")
+            else []
+        )
+        existing = next(
+            (e for e in entries if getattr(e, "unique_id", None) == serial),
+            None,
+        )
+        if existing is not None:
+            current_host = str(existing.data.get(CONF_HOST, "")).strip()
+            if current_host:
+                try:
+                    ipaddress.ip_address(current_host)
+                except ValueError:
+                    # Existing entry uses a hostname (e.g. eltako-xxxx.local); preserve it!
+                    return {CONF_PORT: port} if port is not None else None
+
+        updates: dict[str, Any] = {CONF_HOST: discovered_ip}
+        if port is not None:
+            updates[CONF_PORT] = port
+        return updates
+
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
         """Handle Zeroconf (_eltako._tcp.local.) discovery."""
-        host = str(discovery_info.host)
+        host = normalize_host(str(discovery_info.host))
         port = int(discovery_info.port or DEFAULT_PORT)
         props = discovery_info.properties or {}
 
@@ -109,7 +142,7 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         if serial:
             await self.async_set_unique_id(serial)
             self._abort_if_unique_id_configured(
-                updates={CONF_HOST: host, CONF_PORT: port}
+                updates=self._build_discovery_host_updates(serial, host, port)
             )
         else:
             self._async_abort_entries_match({CONF_HOST: host})
@@ -131,7 +164,7 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: DhcpServiceInfo
     ) -> ConfigFlowResult:
         """Handle DHCP (eltako-* / MAC OUI C8:F5:D6) discovery."""
-        host = str(discovery_info.ip)
+        host = normalize_host(str(discovery_info.ip))
         hostname = str(discovery_info.hostname or "").strip()
         serial = ""
         if hostname.lower().startswith("eltako-"):
@@ -139,7 +172,9 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if serial:
             await self.async_set_unique_id(serial)
-            self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+            self._abort_if_unique_id_configured(
+                updates=self._build_discovery_host_updates(serial, host)
+            )
         else:
             self._async_abort_entries_match({CONF_HOST: host})
 
@@ -230,7 +265,8 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
+            host = normalize_host(user_input[CONF_HOST])
+            user_input[CONF_HOST] = host
             port = user_input[CONF_PORT]
             pop = user_input[CONF_POP]
 
@@ -324,7 +360,8 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
         reconfigure_entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
+            host = normalize_host(user_input[CONF_HOST])
+            user_input[CONF_HOST] = host
             port = user_input[CONF_PORT]
             pop = user_input[CONF_POP]
 

@@ -20,6 +20,21 @@ def load_fixture(name: str):
         return json.load(f)
 
 
+def test_normalize_host_interchangeable_inputs():
+    """Verify hostnames, mDNS trailing dots, URLs, and IPs normalize cleanly."""
+    from aioeltako_ip.client import normalize_host
+
+    assert normalize_host("192.168.188.229") == "192.168.188.229"
+    assert normalize_host("eltako-adnqmlq56m.local") == "eltako-adnqmlq56m.local"
+    assert normalize_host("eltako-adnqmlq56m.local.") == "eltako-adnqmlq56m.local"
+    assert normalize_host("https://eltako-adnqmlq56m.local:443/") == "eltako-adnqmlq56m.local"
+    assert normalize_host("eltako-adnqmlq56m.home:443/api/v0") == "eltako-adnqmlq56m.home"
+
+    client = EltakoClient("https://eltako-adnqmlq56m.local./", pop="test")
+    assert client.host == "eltako-adnqmlq56m.local"
+    assert client.root_url == "https://eltako-adnqmlq56m.local:443"
+
+
 @pytest.mark.asyncio
 async def test_login_success(test_base_url: str, test_host: str, test_pop: str):
     login_data = load_fixture("login")

@@ -522,3 +522,12 @@ async def test_zeroconf_autodiscovery_flow():
     flow.async_set_unique_id.assert_called_once_with("0000000000")
     assert flow.context["title_placeholders"]["name"] == "ELTAKO-ESR64PF-IPM (0000000000)"
 
+    # Verify that if an existing entry uses a hostname, Zeroconf does not overwrite CONF_HOST with an IP
+    existing_entry = MagicMock()
+    existing_entry.unique_id = "0000000000"
+    existing_entry.data = {"host": "eltako-0000000000.local", "port": 443}
+    flow.hass.config_entries.async_entries.return_value = [existing_entry]
+
+    updates = flow._build_discovery_host_updates("0000000000", "192.0.2.1", 443)
+    assert updates == {"port": 443}
+

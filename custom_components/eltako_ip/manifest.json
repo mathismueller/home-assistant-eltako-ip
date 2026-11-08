@@ -16,8 +16,10 @@
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/mathismueller/home-assistant-eltako-ip/issues",
-  "requirements": [],
-  "version": "0.2.0",
+  "requirements": [
+    "git+https://github.com/mathismueller/home-assistant-eltako-ip.git@v0.2.1b0#aioeltako-ip==0.2.1b0"
+  ],
+  "version": "0.2.1b0",
   "zeroconf": [
     {
       "type": "_eltako._tcp.local."

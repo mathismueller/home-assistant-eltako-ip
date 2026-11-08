@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 from typing import Any, Optional
+from urllib.parse import urlparse
 import aiohttp
 
 from .exceptions import (
@@ -33,6 +35,24 @@ from .models import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def normalize_host(host: str) -> str:
+    """Normalize a hostname, IP address, or pasted URL into a clean host string."""
+    cleaned = host.strip()
+    if "://" in cleaned:
+        parsed = urlparse(cleaned)
+        if parsed.hostname:
+            cleaned = parsed.hostname
+    else:
+        cleaned = cleaned.split("/", 1)[0]
+        # Strip ":port" if not an IPv6 address
+        if cleaned.count(":") == 1 and not cleaned.startswith("["):
+            cleaned = cleaned.split(":", 1)[0]
+    if cleaned.startswith("[") and cleaned.endswith("]"):
+        cleaned = cleaned[1:-1]
+    cleaned = cleaned.rstrip(".")
+    return cleaned
+
+
 class EltakoClient:
     """Async API Client for Eltako Series 62/64 based on aiohttp."""
 
@@ -46,11 +66,17 @@ class EltakoClient:
         timeout: float = 10.0,
         session: Optional[aiohttp.ClientSession] = None,
     ) -> None:
-        self.host = host
+        clean_host = normalize_host(host)
+        self.host = clean_host
         self.port = port
         self.pop = pop
         self.api_key = api_key
-        self.root_url = f"https://{host}:{port}"
+        try:
+            is_ipv6 = isinstance(ipaddress.ip_address(clean_host), ipaddress.IPv6Address)
+        except ValueError:
+            is_ipv6 = False
+        url_host = f"[{clean_host}]" if is_ipv6 else clean_host
+        self.root_url = f"https://{url_host}:{port}"
         self.base_url = f"{self.root_url}/api/v0"
         self._ssl: bool = ssl_verify
         self._timeout = timeout
