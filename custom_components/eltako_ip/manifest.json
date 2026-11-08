@@ -1,0 +1,13 @@
+{
+  "domain": "eltako_ip",
+  "name": "Eltako Series 62/64 IP",
+  "codeowners": ["@mathismueller"],
+  "config_flow": true,
+  "documentation": "https://github.com/mathismueller/home-assistant-eltako-ip",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/mathismueller/home-assistant-eltako-ip/issues",
+  "requirements": [],
+  "version": "1.0.0",
+  "homeassistant": "2026.11.0"
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "serviceDeviceGuid": "44444444-4444-4444-4444-444444444444",
+    "bridgeDirection": "ingress",
+    "eurId": 16909060,
+    "lastSeen": "2026-11-08T11:54:33Z",
+    "signalStrength": -60,
+    "productGuid": "791a7c28-22e3-4fab-8ecc-0084e15396c5",
+    "deviceGuid": "33333333-3333-3333-3333-333333333333",
+    "config": {}
+  }
+]

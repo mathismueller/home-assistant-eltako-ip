@@ -1,0 +1,6 @@
+{
+  "health": "ok",
+  "maxEurIds": 128,
+  "freeEurIds": 127,
+  "hardwareFilterState": "enabled"
+}

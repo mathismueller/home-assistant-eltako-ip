@@ -1,0 +1,56 @@
+start_enocean_scan:
+  name: Start EnOcean Pairing Scan
+  description: Puts the EnOcean transceiver into teach-in mode to discover new sensors or switches.
+
+pair_enocean_device:
+  name: Pair EnOcean Device
+  description: Registers a discovered EnOcean radio ID and binds it to a product profile.
+  fields:
+    eur_id:
+      name: EnOcean Radio ID (EURID)
+      description: The numeric EnOcean radio ID discovered during scan (e.g. 16909060).
+      required: true
+      example: 16909060
+      selector:
+        number:
+          min: 1
+          max: 4294967295
+          mode: box
+    product_guid:
+      name: Product GUID
+      description: The GUID of the Eltako product type (e.g. FTK sensor is 791a7c28-22e3-4fab-8ecc-0084e15396c5).
+      required: true
+      example: "791a7c28-22e3-4fab-8ecc-0084e15396c5"
+      selector:
+        text:
+
+expose_matter_device:
+  name: Expose Device to Matter Bridge
+  description: Exposes an internal actuator channel or paired EnOcean sensor to the device's Matter bridge.
+  fields:
+    product_guid:
+      name: Product GUID
+      description: Product GUID of the device to expose.
+      required: true
+      example: "791a7c28-22e3-4fab-8ecc-0084e15396c5"
+      selector:
+        text:
+    device_guid:
+      name: Device GUID
+      description: Logical device GUID to expose.
+      required: true
+      example: "36a755be-2f70-4d0c-868b-259a0573d7f9"
+      selector:
+        text:
+
+remove_matter_device:
+  name: Remove Device from Matter Bridge
+  description: Removes a bridged device from the Matter network.
+  fields:
+    service_device_guid:
+      name: Service Device GUID
+      description: The GUID of the bridged Matter service device to remove.
+      required: true
+      example: "7bbc0af3-423b-4c61-b269-ab90abc6135a"
+      selector:
+        text:

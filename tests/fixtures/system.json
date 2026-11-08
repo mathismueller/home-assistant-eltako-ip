@@ -1,0 +1,16 @@
+{
+  "infos": {
+    "softwareVersion": "2.5.0",
+    "hardwareVersion": "1.0.0"
+  },
+  "product": {
+    "productName": "ELTAKO-ESR64PF-IPM",
+    "productType": "ELTAKO-ESR64PF-IPM",
+    "productGuid": "4893e06b-448c-40d5-b426-42e2e6b73656",
+    "serialNumber": "ELTAKO-0000000000",
+    "manufacturer": {
+      "name": "Eltako GmbH",
+      "website": "https://www.eltako.com/"
+    }
+  }
+}

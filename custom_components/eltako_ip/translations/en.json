@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Eltako Series 62/64 IP",
+        "description": "Enter the IP address and the Proof of Possession (PoP) code from the device sticker.",
+        "data": {
+          "host": "Host / IP Address",
+          "port": "Port",
+          "pop": "Proof of Possession (PoP)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Eltako Series 62/64 IP",
+        "description": "Update connection settings or the Proof of Possession (PoP) code for this device.",
+        "data": {
+          "host": "Host / IP Address",
+          "port": "Port",
+          "pop": "Proof of Possession (PoP)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Eltako device.",
+      "invalid_auth": "Invalid Proof of Possession (PoP) code.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Device is already configured in Home Assistant.",
+      "reconfigure_successful": "Device was reconfigured successfully.",
+      "another_device": "The configured host belongs to a different Eltako device (different serial number)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Eltako Gateway Options",
+        "data": {
+          "scan_interval": "Polling Interval (seconds)",
+          "repeater_level": "EnOcean Repeater Level"
+        }
+      }
+    }
+  }
+}
