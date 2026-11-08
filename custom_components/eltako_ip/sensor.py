@@ -25,6 +25,8 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from aioeltako_ip import format_eur_id_hex
+
 from .coordinator import EltakoConfigEntry, EltakoDataUpdateCoordinator
 from .entity import EltakoDeviceEntity, EltakoGatewayEntity, get_coordinator
 
@@ -191,6 +193,8 @@ class EltakoEnOceanRssiSensor(EltakoDeviceEntity, SensorEntity):
         if not eo_dev:
             return {}
         return {
+            "eur_id": eo_dev.eur_id,
+            "eur_id_hex": format_eur_id_hex(eo_dev.eur_id),
             "service_device_guid": eo_dev.service_device_guid,
             "last_seen": eo_dev.last_seen,
             "bridge_direction": eo_dev.bridge_direction,
