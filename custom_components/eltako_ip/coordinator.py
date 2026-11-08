@@ -213,7 +213,7 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
 
             self._async_cleanup_removed_devices(devices_map, eo_devices_map)
 
-            return EltakoData(
+            new_data = EltakoData(
                 system=self.system_info,
                 devices=devices_map,
                 enocean_status=eo_status,
@@ -226,6 +226,8 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
                 products=self._products_cache,
                 matter_supported=self.matter_supported,
             )
+            self._async_sync_matter_device_links(new_data)
+            return new_data
         except AuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except (EltakoConnectionError, EltakoError) as err:
@@ -293,11 +295,103 @@ class EltakoDataUpdateCoordinator(DataUpdateCoordinator[EltakoData]):
         # 5. Remove from Home Assistant Device Registry
         if self.hass is not None:
             dev_reg = dr.async_get(self.hass)
+            entry_id = getattr(self.config_entry, "entry_id", None)
             for ident in (device_guid, service_device_guid):
                 if ident:
-                    ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
+                    if isinstance(entry_id, str) and hasattr(
+                        dev_reg, "async_get_device_by_identifier"
+                    ):
+                        ha_dev = dev_reg.async_get_device_by_identifier(
+                            (DOMAIN, ident), entry_id
+                        )
+                    else:
+                        ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
                     if ha_dev:
                         dev_reg.async_remove_device(ha_dev.id)
+
+    def get_matter_node_prefix(self) -> Optional[str]:
+        """Resolve the Matter fabric/node identifier prefix (deviceid_<fabric>-<node>) for this gateway."""
+        if self.hass is None:
+            return None
+        dev_reg = dr.async_get(self.hass)
+        serial_ident = ("matter", f"serial_{self.system_info.serial_number}")
+        if hasattr(dev_reg, "async_get_devices"):
+            matter_devs = dev_reg.async_get_devices(identifiers={serial_ident})
+        else:
+            dev = dev_reg.async_get_device(identifiers={serial_ident})
+            matter_devs = [dev] if dev else []
+        for m_entry in matter_devs:
+            for domain, ident_val in m_entry.identifiers:
+                if domain == "matter" and ident_val.endswith("-MatterNodeDevice"):
+                    return ident_val.removesuffix("-MatterNodeDevice")
+        return None
+
+    def get_device_identifiers(
+        self,
+        device_guid: Optional[str] = None,
+        *,
+        is_gateway: bool = False,
+        data: Optional[EltakoData] = None,
+    ) -> set[tuple[str, str]]:
+        """Build Device Registry identifiers, including linked Matter identifiers when exposed."""
+        cur_data = data if data is not None else getattr(self, "data", None)
+        identifiers: set[tuple[str, str]] = set()
+        if is_gateway:
+            identifiers.add((DOMAIN, self.system_info.serial_number))
+            if device_guid:
+                identifiers.add((DOMAIN, device_guid))
+            elif cur_data is not None:
+                for d in cur_data.devices.values():
+                    if d.product_guid == self.system_info.product_guid:
+                        identifiers.add((DOMAIN, d.device_guid))
+                        device_guid = d.device_guid
+                        break
+            if cur_data is not None and cur_data.matter_supported:
+                identifiers.add(("matter", f"serial_{self.system_info.serial_number}"))
+        elif device_guid:
+            identifiers.add((DOMAIN, device_guid))
+
+        if cur_data is not None and cur_data.matter_supported and device_guid:
+            m_dev = cur_data.get_matter_device(device_guid)
+            if m_dev and m_dev.endpoint_id > 0:
+                prefix = self.get_matter_node_prefix()
+                if prefix:
+                    identifiers.add(("matter", f"{prefix}-{m_dev.endpoint_id}"))
+
+        return identifiers
+
+    def _async_sync_matter_device_links(self, new_data: EltakoData) -> None:
+        """Synchronize Matter cross-integration identifiers on all registered Eltako devices."""
+        if self.hass is None or self.config_entry is None:
+            return
+        dev_reg = dr.async_get(self.hass)
+        for device_entry in dr.async_entries_for_config_entry(
+            dev_reg, self.config_entry.entry_id
+        ):
+            eltako_ids = [
+                ident_val
+                for domain, ident_val in device_entry.identifiers
+                if domain == DOMAIN
+            ]
+            if not eltako_ids:
+                continue
+            if self.system_info.serial_number in eltako_ids:
+                desired = self.get_device_identifiers(is_gateway=True, data=new_data)
+            else:
+                desired = self.get_device_identifiers(
+                    eltako_ids[0], is_gateway=False, data=new_data
+                )
+            if desired and device_entry.identifiers != desired:
+                try:
+                    dev_reg.async_update_device(
+                        device_entry.id, new_identifiers=desired
+                    )
+                except Exception as err:
+                    _LOGGER.debug(
+                        "Could not update linked Matter identifiers for %s: %s",
+                        device_entry.name,
+                        err,
+                    )
 
     def _async_cleanup_removed_devices(
         self,

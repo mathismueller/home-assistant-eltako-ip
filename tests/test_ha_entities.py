@@ -557,3 +557,70 @@ async def test_zeroconf_autodiscovery_flow():
     updates = flow._build_discovery_host_updates("0000000000", "192.0.2.1", 443)
     assert updates == {"port": 443}
 
+
+def test_matter_cross_integration_device_identifiers(mock_coordinator):
+    """Test linking Eltako IP devices with Matter devices via shared Device Registry identifiers."""
+    from unittest.mock import patch
+    from custom_components.eltako_ip.coordinator import EltakoDataUpdateCoordinator
+
+    # Attach the real methods from EltakoDataUpdateCoordinator onto mock_coordinator
+    mock_coordinator.hass = MagicMock()
+    mock_coordinator.get_matter_node_prefix = (
+        lambda: EltakoDataUpdateCoordinator.get_matter_node_prefix(mock_coordinator)
+    )
+    mock_coordinator.get_device_identifiers = (
+        lambda device_guid=None, *, is_gateway=False, data=None: (
+            EltakoDataUpdateCoordinator.get_device_identifiers(
+                mock_coordinator,
+                device_guid,
+                is_gateway=is_gateway,
+                data=data,
+            )
+        )
+    )
+
+    # Simulate Matter bridge device and bridged endpoints in HA Device Registry
+    mock_coordinator.data.matter_devices = [
+        MatterDevice(
+            service_device_guid="77777777-7777-7777-7777-777777777777",
+            device_guid="11111111-1111-1111-1111-111111111111",
+            product_guid="4893e06b-448c-40d5-b426-42e2e6b73656",
+            endpoint_id=10,
+        ),
+        MatterDevice(
+            service_device_guid="99999999-9999-9999-9999-999999999999",
+            device_guid="33333333-3333-3333-3333-333333333333",
+            product_guid="791a7c28-22e3-4fab-8ecc-0084e15396c5",
+            endpoint_id=24,
+        ),
+    ]
+
+    matter_bridge_entry = MagicMock()
+    matter_bridge_entry.identifiers = {
+        ("matter", "deviceid_142B913B69BC56B2-0000000000000017-MatterNodeDevice"),
+        ("matter", "serial_ELTAKO-0000000000"),
+    }
+    mock_dev_reg = MagicMock()
+    mock_dev_reg.async_get_devices.return_value = [matter_bridge_entry]
+
+    with patch(
+        "custom_components.eltako_ip.coordinator.dr.async_get",
+        return_value=mock_dev_reg,
+    ):
+        gw_ids = mock_coordinator.get_device_identifiers(is_gateway=True)
+        assert gw_ids == {
+            ("eltako_ip", "ELTAKO-0000000000"),
+            ("eltako_ip", "11111111-1111-1111-1111-111111111111"),
+            ("matter", "serial_ELTAKO-0000000000"),
+            ("matter", "deviceid_142B913B69BC56B2-0000000000000017-10"),
+        }
+
+        ftk_ids = mock_coordinator.get_device_identifiers(
+            "33333333-3333-3333-3333-333333333333", is_gateway=False
+        )
+        assert ftk_ids == {
+            ("eltako_ip", "33333333-3333-3333-3333-333333333333"),
+            ("matter", "deviceid_142B913B69BC56B2-0000000000000017-24"),
+        }
+
+

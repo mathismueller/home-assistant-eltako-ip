@@ -129,9 +129,18 @@ class EltakoUnpairEnOceanDeviceButton(EltakoDeviceEntity, ButtonEntity):
 
         if self.hass is not None:
             dev_reg = dr.async_get(self.hass)
+            cfg_entry = getattr(self.coordinator, "config_entry", None)
+            entry_id = getattr(cfg_entry, "entry_id", None)
             for ident in (self._device_guid, self._service_device_guid):
                 if ident:
-                    ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
+                    if isinstance(entry_id, str) and hasattr(
+                        dev_reg, "async_get_device_by_identifier"
+                    ):
+                        ha_dev = dev_reg.async_get_device_by_identifier(
+                            (DOMAIN, ident), entry_id
+                        )
+                    else:
+                        ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, ident)})
                     if ha_dev:
                         dev_reg.async_remove_device(ha_dev.id)
 

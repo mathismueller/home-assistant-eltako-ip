@@ -6,6 +6,7 @@ from collections.abc import Awaitable
 from typing import Any, Optional
 
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -55,11 +56,17 @@ class EltakoGatewayEntity(EltakoBaseEntity):
             if dev.product_guid == sys_info.product_guid and dev.display_name:
                 display_name = dev.display_name
                 break
+        identifiers = {(DOMAIN, sys_info.serial_number)}
+        if hasattr(self.coordinator, "get_device_identifiers"):
+            custom_ids = self.coordinator.get_device_identifiers(is_gateway=True)
+            if isinstance(custom_ids, set):
+                identifiers = custom_ids
         return DeviceInfo(
-            identifiers={(DOMAIN, sys_info.serial_number)},
+            identifiers=identifiers,
             name=display_name,
             manufacturer="Eltako",
             model=sys_info.product_name,
+            serial_number=sys_info.serial_number,
             sw_version=sys_info.software_version,
             hw_version=sys_info.hardware_version,
         )
@@ -116,14 +123,22 @@ class EltakoDeviceEntity(EltakoBaseEntity):
                     if d.product_guid == sys_info.product_guid and d.display_name:
                         name = d.display_name
                         break
+            identifiers = {
+                (DOMAIN, sys_info.serial_number),
+                (DOMAIN, self._device_guid),
+            }
+            if hasattr(self.coordinator, "get_device_identifiers"):
+                custom_ids = self.coordinator.get_device_identifiers(
+                    self._device_guid, is_gateway=True
+                )
+                if isinstance(custom_ids, set):
+                    identifiers = custom_ids
             return DeviceInfo(
-                identifiers={
-                    (DOMAIN, sys_info.serial_number),
-                    (DOMAIN, self._device_guid),
-                },
+                identifiers=identifiers,
                 name=name,
                 manufacturer="Eltako",
                 model=sys_info.product_name,
+                serial_number=sys_info.serial_number,
                 sw_version=sys_info.software_version,
                 hw_version=sys_info.hardware_version,
             )
@@ -134,10 +149,31 @@ class EltakoDeviceEntity(EltakoBaseEntity):
             if dev
             else "Eltako Device"
         )
+        identifiers = {(DOMAIN, self._device_guid)}
+        if hasattr(self.coordinator, "get_device_identifiers"):
+            custom_ids = self.coordinator.get_device_identifiers(
+                self._device_guid, is_gateway=False
+            )
+            if isinstance(custom_ids, set):
+                identifiers = custom_ids
+
+        via_kwargs: dict[str, Any] = {"via_device": (DOMAIN, sys_info.serial_number)}
+        cfg_entry = getattr(self.coordinator, "config_entry", None)
+        entry_id = getattr(cfg_entry, "entry_id", None)
+        if self.hass is not None and isinstance(entry_id, str):
+            dev_reg = dr.async_get(self.hass)
+            if hasattr(dev_reg, "async_get_device_by_identifier"):
+                gw_entry = dev_reg.async_get_device_by_identifier(
+                    (DOMAIN, sys_info.serial_number),
+                    entry_id,
+                )
+                if gw_entry is not None and isinstance(getattr(gw_entry, "id", None), str):
+                    via_kwargs = {"via_device_id": gw_entry.id}
+
         return DeviceInfo(
-            identifiers={(DOMAIN, self._device_guid)},
+            identifiers=identifiers,
             name=name,
             manufacturer="Eltako",
             model=model,
-            via_device=(DOMAIN, sys_info.serial_number),
+            **via_kwargs,
         )

@@ -38,7 +38,7 @@ wheels = [
 
 [[package]]
 name = "aioeltako-ip"
-version = "0.2.1b4"
+version = "0.2.1b5"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

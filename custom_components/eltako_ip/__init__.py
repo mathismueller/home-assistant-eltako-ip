@@ -157,6 +157,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: EltakoConfigEntry) -> bo
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+    # Register the gateway device upfront so child entities can reference via_device_id
+    dev_reg = dr.async_get(hass)
+    gw_name = system_info.product_name
+    for d in coordinator.data.devices.values():
+        if d.product_guid == system_info.product_guid and d.display_name:
+            gw_name = d.display_name
+            break
+    dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers=coordinator.get_device_identifiers(is_gateway=True),
+        manufacturer="Eltako",
+        model=system_info.product_name,
+        name=gw_name,
+        serial_number=system_info.serial_number,
+        sw_version=system_info.software_version,
+        hw_version=system_info.hardware_version,
+    )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -182,17 +200,27 @@ def _async_register_services(hass: HomeAssistant) -> None:
         device_guid: Optional[str] = call.data.get("device_guid")
         display_name: str = call.data["display_name"]
 
+        entry_id = coord.config_entry.entry_id if coord.config_entry else None
+        dev_reg = dr.async_get(hass)
         if device_guid:
             await coord.client.rename_device(device_guid, display_name)
-            dev_reg = dr.async_get(hass)
-            ha_dev = dev_reg.async_get_device(identifiers={(DOMAIN, device_guid)})
+            ha_dev = (
+                dev_reg.async_get_device_by_identifier((DOMAIN, device_guid), entry_id)
+                if entry_id and hasattr(dev_reg, "async_get_device_by_identifier")
+                else dev_reg.async_get_device(identifiers={(DOMAIN, device_guid)})
+            )
             if ha_dev:
                 dev_reg.async_update_device(ha_dev.id, name=display_name)
         else:
             await coord.client.update_system_name(display_name)
-            dev_reg = dr.async_get(hass)
-            ha_dev = dev_reg.async_get_device(
-                identifiers={(DOMAIN, coord.system_info.serial_number)}
+            ha_dev = (
+                dev_reg.async_get_device_by_identifier(
+                    (DOMAIN, coord.system_info.serial_number), entry_id
+                )
+                if entry_id and hasattr(dev_reg, "async_get_device_by_identifier")
+                else dev_reg.async_get_device(
+                    identifiers={(DOMAIN, coord.system_info.serial_number)}
+                )
             )
             if ha_dev:
                 dev_reg.async_update_device(ha_dev.id, name=display_name)
