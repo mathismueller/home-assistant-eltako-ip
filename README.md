@@ -1,61 +1,10 @@
 # Eltako Series 62/64 IP Home Assistant Integration & Client
 
-A modern, local Home Assistant integration and typed async Python client (`aioeltako-ip`) for **Eltako Series 62-IP and Series 64-IPM** smart home devices, targeting **Home Assistant 2026.11+** and **Python 3.14+**.
+A Home Assistant integration and typed async Python client (`aioeltako-ip`) for **Eltako Series 62-IP and Series 64-IPM** smart home devices, targeting **Home Assistant 2026.11+**. The goal is to enable local setup of actuators and enocean devices without the manufacturer app through the REST-API.
 
 Supported hardware:
-- **Actuators**: ESR64PF-IPM (potential-free relay switch), ESR64NP-IPM, EUD64NPN-IPM, ESB64NP-IPM.
+- **Actuators**: ESR64PF-IPM (only tested device so far), ESR64NP-IPM, EUD64NPN-IPM, ESB64NP-IPM.
 - **EnOcean Gateway**: EOA64 radio adapter with connected EnOcean sensors (e.g. FTK solar window/door contacts).
-- **Matter Bridge**: Direct management of on-device Matter bridge exposure.
-
----
-
-## Architecture & Design
-
-- **Native `aiohttp` Client**: Built directly on `aiohttp` to integrate natively with Home Assistant Core's `async_get_clientsession(hass)` connection pool.
-- **Home Assistant 2026.11 Native**: Fully compatible with Home Assistant 2026.11's built-in **Marketplace** (replacing legacy HACS) and Python 3.14 runtime requirements.
-- **Zero Cloud / 100% Local**: Communicates directly over local HTTPS (port 443) with the device's on-device REST API using Proof-of-Possession (PoP) authentication.
-- **Strict Privacy**: Hardware serial numbers, EURIDs, Proof-of-Possession PINs, and local IPs are strictly parameterized and excluded from version control.
-
----
-
-## Repository Structure
-
-```text
-├── custom_components/eltako_ip/   # Home Assistant custom component
-│   ├── manifest.json              # Integration metadata (min HA 2026.11)
-│   ├── config_flow.py             # UI configuration & Options flow
-│   ├── coordinator.py             # DataUpdateCoordinator (10s polling)
-│   ├── switch.py                  # Relay switch platform
-│   ├── binary_sensor.py           # Window/door contacts & wired input
-│   ├── sensor.py                  # EnOcean RSSI & capacity diagnostics
-│   ├── select.py                  # EnOcean repeater level control
-│   ├── button.py                  # Trigger EnOcean pairing scan
-│   ├── services.yaml              # Custom service definitions
-│   └── translations/              # German & English translations
-├── src/aioeltako_ip/              # Standalone async client library
-│   ├── client.py                  # EltakoClient (aiohttp-based)
-│   ├── models.py                  # Typed dataclasses
-│   └── exceptions.py              # Error hierarchy
-├── scripts/                       # Developer & maintenance utilities
-│   ├── deploy.py                  # Deployment script for local testing & live HA
-│   ├── test_live_entities.py      # End-to-end live hardware test
-│   ├── dev_cli.py                 # Live API fixture capture (writes to local/)
-│   ├── anonymize.py               # Sanitizes local dumps into mock fixtures
-│   ├── explore.py                 # Endpoint discovery probe
-│   ├── inspect_spec.py            # OpenAPI spec analyzer
-│   ├── inspect_products.py        # Product catalog inspector
-│   └── api.yaml                   # Device OpenAPI 3.1.0 specification
-├── tests/                         # Pytest test suite
-│   ├── fixtures/                  # Anonymized synthetic mock fixtures (committed)
-│   ├── fixtures/local/            # Raw hardware fixture dumps (git-ignored)
-│   ├── conftest.py                # Pytest configuration & --live flag
-│   ├── test_client.py             # Mock unit tests (aioresponses, run in CI)
-│   ├── test_ha_entities.py        # Entity tests against Home Assistant Core classes
-│   └── test_live.py               # Real hardware integration tests (--live)
-├── hacs.json                      # Marketplace repository configuration
-├── ROADMAP.md                     # Roadmap to 100% app feature parity
-└── pyproject.toml                 # uv project & packaging configuration
-```
 
 ---
 
@@ -138,8 +87,8 @@ python3 scripts/deploy.py --restart
 
 ## Home Assistant Setup
 
-### Adding the Integration in Home Assistant
-1. Ensure the integration has been deployed via `scripts/deploy.py` or downloaded via the **Marketplace**.
+### Adding the Integration in Home Assistant 
+1. Ensure the integration has been deployed via `scripts/deploy.py` or add this repo as a custom repository. Deployment via the **Marketplace** is not possible yet.
 2. Restart Home Assistant.
 3. In Home Assistant, navigate to **Settings** > **Devices & Services** > **Add Integration**.
 4. Search for **Eltako Series 62/64 IP**.
@@ -157,6 +106,40 @@ Once added, the integration automatically discovers and creates:
 * **EnOcean Memory (`sensor.eltako_enocean_devices_capacity`)**: Diagnostic sensor tracking paired sensor capacity.
 * **Repeater Mode (`select.eltako_enocean_repeater`)**: Controls EOA64 repeater level (`off`, `level_1`, `level_2`).
 * **Pairing Scan (`button.eltako_scan_enocean_devices`)**: Puts the gateway into pairing mode to learn new EnOcean devices.
+
+---
+
+## Repository Structure
+
+```text
+├── custom_components/eltako_ip/   # Home Assistant custom component
+│   ├── manifest.json              # Integration metadata (min HA 2026.11)
+│   ├── config_flow.py             # UI configuration & Options flow
+│   ├── coordinator.py             # DataUpdateCoordinator (10s polling)
+│   ├── switch.py                  # Relay switch platform
+│   ├── binary_sensor.py           # Window/door contacts & wired input
+│   ├── sensor.py                  # EnOcean RSSI & capacity diagnostics
+│   ├── select.py                  # EnOcean repeater level control
+│   ├── button.py                  # Trigger EnOcean pairing scan
+│   ├── services.yaml              # Custom service definitions
+│   └── translations/              # German & English translations
+├── src/aioeltako_ip/              # Standalone async client library
+│   ├── client.py                  # EltakoClient (aiohttp-based)
+│   ├── models.py                  # Typed dataclasses
+│   └── exceptions.py              # Error hierarchy
+├── scripts/                       # Developer & maintenance utilities
+│   ├── ...                  
+├── tests/                         # Pytest test suite
+│   ├── fixtures/                  # Synthetic mock fixtures (committed)
+│   ├── fixtures/local/            # Raw hardware fixture dumps (git-ignored)
+│   ├── conftest.py                # Pytest configuration & --live flag
+│   ├── test_client.py             # Mock unit tests (aioresponses, run in CI)
+│   ├── test_ha_entities.py        # Entity tests against Home Assistant Core classes
+│   └── test_live.py               # Real hardware integration tests (--live)
+├── hacs.json                      # Marketplace repository configuration
+├── ROADMAP.md                     # Roadmap to 100% app feature parity
+└── pyproject.toml                 # uv project & packaging configuration
+```
 
 ---
 
