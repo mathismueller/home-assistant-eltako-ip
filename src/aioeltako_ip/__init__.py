@@ -1,6 +1,11 @@
 """aioeltako_ip - Asynchronous Python client for Eltako Series 62/64 IP REST API."""
 
-from .automations import build_capabilities, device_class_for_output, validate_rule
+from .automations import (
+    build_capabilities,
+    device_class_for_output,
+    device_settings,
+    validate_rule,
+)
 from .client import EltakoClient
 from .exceptions import (
     AuthenticationError,
@@ -40,6 +45,7 @@ __all__ = [
     "AutomationRule",
     "build_capabilities",
     "device_class_for_output",
+    "device_settings",
     "validate_rule",
     "Characteristic",
     "Device",

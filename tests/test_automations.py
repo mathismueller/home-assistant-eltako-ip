@@ -13,6 +13,7 @@ from aioeltako_ip import (
     EltakoClient,
     UnsupportedCommandError,
     build_capabilities,
+    device_settings,
     validate_rule,
 )
 
@@ -258,6 +259,78 @@ async def test_concurrent_requests_do_not_deadlock(
                 timeout=10,
             )
             assert all(len(r) == 1 for r in results)
+
+
+def _settings_products():
+    def char(identifier, **kw):
+        base = {"identifier": identifier, "type": "number", "category": "setting"}
+        base.update(kw)
+        return base
+
+    return {
+        "products": [
+            {
+                "productGuid": "prod-esb",
+                "name": "ESB",
+                "features": [
+                    {
+                        "characteristics": [
+                            char("runtimeMode", type="enumeration", defaultValue="manual",
+                                 enumerations=[{"key": "auto"}, {"key": "manual"}]),
+                            char("runtime", defaultValue="200000", unit="ms", minimum=1000, maximum=900000),
+                            char("enableTilt", type="enumeration", defaultValue="disabled",
+                                 enumerations=[{"key": "disabled"}, {"key": "enabled"}]),
+                            char("tiltRuntime", defaultValue="2000", unit="ms"),
+                            char("targetPosition", type="number", category="function"),
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def _settings_devices():
+    return [
+        {
+            "deviceGuid": "shade-1",
+            "productGuid": "prod-esb",
+            "displayName": "Shade",
+            "functions": [{"identifier": "targetPosition", "value": 100}],
+            "infos": [],
+            "settings": [],
+        }
+    ]
+
+
+def test_device_settings_defaults_and_gating():
+    out = device_settings(_settings_devices(), _settings_products())
+    assert len(out["devices"]) == 1
+    by_ident = {s["identifier"]: s for s in out["devices"][0]["settings"]}
+    # functions are not settings
+    assert "targetPosition" not in by_ident
+    assert by_ident["runtime"]["value"] == "200000"
+    assert by_ident["runtime"]["unit"] == "ms"
+    assert by_ident["runtime"]["applies"] is True
+    # enableTilt defaults to disabled -> tilt settings gated with reason
+    assert by_ident["tiltRuntime"]["applies"] is False
+    assert by_ident["tiltRuntime"]["reason"] == "tilt"
+
+
+def test_device_settings_live_values_enable_gated():
+    devices = _settings_devices()
+    devices[0]["settings"] = [
+        {"identifier": "enableTilt", "value": "enabled"},
+        {"identifier": "runtimeMode", "value": "auto"},
+    ]
+    out = device_settings(devices, _settings_products())
+    by_ident = {s["identifier"]: s for s in out["devices"][0]["settings"]}
+    tilt = by_ident["tiltRuntime"]
+    assert tilt["applies"] is True
+    assert tilt["value"] == "2000"  # default, not reported live
+    runtime = next(s for s in out["devices"][0]["settings"] if s["identifier"] == "runtime")
+    assert runtime["applies"] is False
+    assert runtime["reason"] == "runtime"
 
 
 @pytest.mark.asyncio

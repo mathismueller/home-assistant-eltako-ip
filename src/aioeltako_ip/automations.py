@@ -188,6 +188,128 @@ def _is_trigger_identifier(identifier: str) -> bool:
     return not identifier.startswith(NON_TRIGGER_PREFIXES)
 
 
+# Settings that only take effect under another setting's value, from spec
+# prose and observed firmware behavior (the product DB declares settings
+# flat, without conditions). Gated identifiers render dimmed with a reason.
+SETTING_CONDITIONS: tuple[dict[str, Any], ...] = (
+    {
+        "when": {"enableTilt": "enabled"},
+        "gates": ("tiltRuntime", "targetTilt"),
+        "reason": "tilt",
+    },
+    {
+        "when": {"runtimeMode": "manual"},
+        "gates": ("runtime",),
+        "reason": "runtime",
+    },
+)
+
+
+def _product_settings(products_raw: Any) -> dict[str, list[dict[str, Any]]]:
+    """Map productGuid -> declared setting characteristics from /products."""
+    items: Any = products_raw
+    if isinstance(items, dict):
+        items = items.get("products", list(items.values()))
+    result: dict[str, list[dict[str, Any]]] = {}
+    if not isinstance(items, list):
+        return result
+    for product in items:
+        if not isinstance(product, dict) or "productGuid" not in product:
+            continue
+        settings: list[dict[str, Any]] = []
+        for feature in product.get("features", []):
+            if not isinstance(feature, dict):
+                continue
+            for char in feature.get("characteristics", []):
+                if not isinstance(char, dict) or "identifier" not in char:
+                    continue
+                if char.get("category") != "setting":
+                    continue
+                enums: list[str] = []
+                for item in char.get("enumerations") or []:
+                    if isinstance(item, dict) and "key" in item:
+                        enums.append(str(item["key"]))
+                    elif isinstance(item, str):
+                        enums.append(item)
+                settings.append(
+                    {
+                        "identifier": str(char["identifier"]),
+                        "default": char.get("defaultValue"),
+                        "unit": char.get("unit"),
+                        "minimum": char.get("minimum"),
+                        "maximum": char.get("maximum"),
+                        "enumerations": enums,
+                    }
+                )
+        result[str(product["productGuid"])] = settings
+    return result
+
+
+def device_settings(devices_raw: Any, products_raw: Any) -> dict[str, Any]:
+    """Describe per-device settings from live values + product database.
+
+    Live ``/devices`` rarely reports setting values, so declared product
+    settings (with defaults) are the base; reported values override when
+    present. Each entry carries ``applies`` plus a ``reason`` key when a
+    known condition (``SETTING_CONDITIONS``) disables it.
+    """
+    spec_settings = _product_settings(products_raw)
+    devices = devices_raw if isinstance(devices_raw, list) else []
+    out: list[dict[str, Any]] = []
+    for device in devices:
+        if not isinstance(device, dict) or not device.get("deviceGuid"):
+            continue
+        guid = str(device["deviceGuid"])
+        live: dict[str, Any] = {}
+        for section in ("settings", "functions", "infos"):
+            chars = device.get(section, [])
+            if isinstance(chars, list):
+                for char in chars:
+                    if isinstance(char, dict) and char.get("identifier"):
+                        live[str(char["identifier"])] = char.get("value")
+        declared = spec_settings.get(str(device.get("productGuid", "")), [])
+        settings: list[dict[str, Any]] = []
+        for spec in declared:
+            ident = spec["identifier"]
+            value = live.get(ident, spec["default"])
+            settings.append(
+                {
+                    "identifier": ident,
+                    "value": value,
+                    "live": ident in live,
+                    "default": spec["default"],
+                    "unit": spec["unit"],
+                    "minimum": spec["minimum"],
+                    "maximum": spec["maximum"],
+                    "enumerations": spec["enumerations"],
+                    "applies": True,
+                    "reason": None,
+                }
+            )
+        by_ident = {s["identifier"]: s for s in settings}
+        for cond in SETTING_CONDITIONS:
+            when = cond["when"]
+            if all(live.get(k, _default_of(by_ident, k)) == v for k, v in when.items()):
+                continue
+            for gated in cond["gates"]:
+                if gated in by_ident:
+                    by_ident[gated]["applies"] = False
+                    by_ident[gated]["reason"] = cond["reason"]
+        out.append(
+            {
+                "deviceGuid": guid,
+                "displayName": str(device.get("displayName") or guid[:8]),
+                "settings": settings,
+            }
+        )
+    return {"devices": out, "specVersion": SPEC_VERSION}
+
+
+def _default_of(by_ident: dict[str, dict[str, Any]], identifier: str) -> Any:
+    entry = by_ident.get(identifier)
+    return entry["default"] if entry else None
+
+
 def _product_characteristics(products_raw: Any) -> dict[str, list[str]]:
     """Map productGuid -> characteristic identifiers from /products data.
 

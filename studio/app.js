@@ -55,6 +55,7 @@ const STRINGS = {
     fDesc: "Name",
     hintDesc: "Stored on the device and shown in rule lists.",
     descPlaceholder: "e.g. Staircase hallway",
+    settingDefault: "Product default; live value not reported.",
     hintInputChar: "Only characteristics this input actually reports.",
     eudNote: "Dimmer rules are read-only in this studio version — saving would wipe the dimmer ramp configuration.",
     confirmDelete: "Delete this on-device rule?",
@@ -133,6 +134,7 @@ const STRINGS = {
     fDesc: "Name",
     hintDesc: "Wird im Gerät gespeichert und in Regellisten angezeigt.",
     descPlaceholder: "z. B. Treppenlicht Flur",
+    settingDefault: "Produkt-Standard; Live-Wert wird nicht gemeldet.",
     hintInputChar: "Nur Merkmale, die dieser Eingang tatsächlich meldet.",
     eudNote: "Dimmregeln sind in dieser Version schreibgeschützt – Speichern würde die Rampen-Konfiguration löschen.",
     confirmDelete: "Diese Geräteregel löschen?",
@@ -180,7 +182,12 @@ const LOGIC_LABEL_I18N = {
 
 const logicLabel = (value) => LOGIC_LABEL_I18N[value]?.[lang] || value;
 
-const state = { rules: [], devices: [], enocean: [], caps: null, editing: null };
+const CONDITION_TEXT = {
+  tilt: { en: "Applies only when tilt is enabled (enableTilt).", de: "Wirkt nur bei aktivierter Neigung (enableTilt)." },
+  runtime: { en: "Applies only when runtime mode is manual.", de: "Wirkt nur im manuellen Laufzeitmodus." },
+};
+
+const state = { rules: [], devices: [], enocean: [], caps: null, devSettings: {}, editing: null };
 let lang = localStorage.getItem("studio-lang") || "en";
 if (!STRINGS[lang]) lang = "en";
 
@@ -344,6 +351,17 @@ function renderDevices() {
       rssi.title = eo.lastSeen ? `last seen ${eo.lastSeen}` : "";
       flow.appendChild(rssi);
     }
+    for (const st of state.devSettings[dev.deviceGuid] || []) {
+      const pill = document.createElement("span");
+      pill.className = "pill dim" + (st.applies ? "" : " off");
+      const shown = st.value ?? st.default;
+      pill.textContent = `${st.identifier}: ${shown}${st.unit ? " " + st.unit : ""}`;
+      const tips = [];
+      if (!st.live) tips.push(t("settingDefault"));
+      if (!st.applies && st.reason) tips.push((CONDITION_TEXT[st.reason] || {})[lang] || st.reason);
+      if (tips.length) pill.title = tips.join(" ");
+      flow.appendChild(pill);
+    }
     card.append(name, flow);
     box.appendChild(card);
   }
@@ -389,6 +407,12 @@ async function refresh() {
   try {
     state.caps = await api("/api/capabilities");
   } catch { state.caps = null; }
+  try {
+    const ds = await api("/api/device_settings");
+    state.devSettings = Object.fromEntries(
+      (ds.devices || []).map((d) => [d.deviceGuid, d.settings || []])
+    );
+  } catch { state.devSettings = {}; }
   const modeEl = $("mode");
   modeEl.textContent = status.mode || "mock";
   modeEl.classList.toggle("live", status.mode === "live");

@@ -288,6 +288,16 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def _live_devices_products(self):
+        """Fetch live /devices + /products; returns (devices, products) or (None, error)."""
+        assert self.state.live is not None
+        try:
+            devices = self.state.live._call("GET", "/devices")
+            products = self.state.live._call("GET", "/products")
+            return devices, products
+        except Exception as err:  # noqa: BLE001
+            return None, str(err)
+
     def _send_json(self, obj, status: int = 200):
         body = json.dumps(obj).encode()
         self.send_response(status)
@@ -324,17 +334,28 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send_json(self.state.enocean_devices)
         if parsed.path == "/api/products":
             return self._send_json(self.state.products)
+        if parsed.path == "/api/device_settings":
+            try:
+                describe = _automations.device_settings
+            except (AttributeError, NameError):
+                return self._send_json({"error": "device settings unavailable"}, 501)
+            if self.state.live:
+                devices, products = self._live_devices_products()
+                if devices is None:
+                    return self._send_json({"error": products}, 502)
+                return self._send_json(describe(devices, products))
+            return self._send_json(
+                describe(self.state.devices, self.state.products)
+            )
         if parsed.path == "/api/capabilities":
             try:
                 build_capabilities = _automations.build_capabilities
             except (AttributeError, NameError):
                 return self._send_json({"error": "capabilities unavailable"}, 501)
             if self.state.live:
-                try:
-                    devices = self.state.live._call("GET", "/devices")
-                    products = self.state.live._call("GET", "/products")
-                except Exception as err:  # noqa: BLE001
-                    return self._send_json({"error": str(err)}, 502)
+                devices, products = self._live_devices_products()
+                if devices is None:
+                    return self._send_json({"error": products}, 502)
                 return self._send_json(build_capabilities(devices, products))
             return self._send_json(
                 build_capabilities(self.state.devices, self.state.products)
