@@ -214,8 +214,8 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STUDIO_DIR), **kwargs)
 
-    def log_message(self, fmt, *args):
-        sys.stderr.write("[studio] " + fmt % args + "\n")
+    def log_message(self, format: str, *args):  # noqa: A002 - stdlib signature
+        sys.stderr.write("[studio] " + format % args + "\n")
 
     def _send_json(self, obj, status: int = 200):
         body = json.dumps(obj).encode()
@@ -260,8 +260,9 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/validate":
-            if validate_rule is None:
+            if validate_rule is None or AutomationRule is None:
                 return self._send_json({"ok": True, "problems": []})
+            assert validate_rule is not None and AutomationRule is not None
             try:
                 rule = AutomationRule.from_dict(self._read_json())
                 problems = validate_rule(rule)
