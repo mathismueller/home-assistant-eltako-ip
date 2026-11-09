@@ -405,7 +405,8 @@ async function refresh() {
   $("count").textContent = t("count")(rules.length);
   $("ro").hidden = !state.readOnly;
   $("ro").title = t("readOnlyTitle");
-  $("modeSwitch").textContent = state.readOnly ? t("unlockEdit") : t("lockEdit");
+  $("modeIcon").innerHTML = state.readOnly ? LOCK_SVG : UNLOCK_SVG;
+  $("modeLabel").textContent = state.readOnly ? t("unlockEdit") : t("lockEdit");
   for (const id of ["new", "reset"]) {
     $(id).disabled = state.readOnly;
     $(id).title = state.readOnly ? t("readOnlyTitle") : "";
@@ -863,6 +864,9 @@ function openPicker() {
 }
 
 $("new").addEventListener("click", () => openPicker());
+const LOCK_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`;
+const UNLOCK_SVG = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.6"/></svg>`;
+
 $("modeSwitch").addEventListener("click", async () => {
   if (state.readOnly) {
     if (!confirm(t("confirmUnlock"))) return;
