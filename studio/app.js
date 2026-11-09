@@ -182,6 +182,10 @@ const LOGIC_LABEL_I18N = {
 
 const logicLabel = (value) => LOGIC_LABEL_I18N[value]?.[lang] || value;
 
+// Manufacturer alias -> spec-canonical logic name (same behavior).
+const LOGIC_ALIASES = { buttonTargetValue: "target" };
+const canonicalLogic = (value) => LOGIC_ALIASES[value] || value;
+
 const CONDITION_TEXT = {
   tilt: { en: "Applies only when tilt is enabled (enableTilt).", de: "Wirkt nur bei aktivierter Neigung (enableTilt)." },
   runtime: { en: "Applies only when runtime mode is manual.", de: "Wirkt nur im manuellen Laufzeitmodus." },
@@ -267,8 +271,9 @@ function syncOutput(keepChar, keepLogic) {
 
 function syncLogics(keep) {
   const sel = $("fLogic");
-  const cur = keep || sel.value;
-  const logics = caps().logicsByClass[selectedTargetClass()] || [];
+  const cur = canonicalLogic(keep || sel.value);
+  const seen = new Set();
+  const logics = (caps().logicsByClass[selectedTargetClass()] || []).map(canonicalLogic).filter((l) => !seen.has(l) && seen.add(l));
   sel.innerHTML = logics.map((l) => `<option value="${l}">${logicLabel(l)}</option>`).join("");
   if (!logics.length) sel.innerHTML = `<option value="${cur}">${logicLabel(cur)}</option>`;
   setSelect(sel, cur);
