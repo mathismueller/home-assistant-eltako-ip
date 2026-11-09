@@ -1,5 +1,6 @@
 """aioeltako_ip - Asynchronous Python client for Eltako Series 62/64 IP REST API."""
 
+from .automations import device_class_for_output, validate_rule
 from .client import EltakoClient
 from .exceptions import (
     AuthenticationError,
@@ -37,6 +38,8 @@ __all__ = [
     "UnsupportedCommandError",
     "AutomationAddOn",
     "AutomationRule",
+    "device_class_for_output",
+    "validate_rule",
     "Characteristic",
     "Device",
     "EnOceanDevice",

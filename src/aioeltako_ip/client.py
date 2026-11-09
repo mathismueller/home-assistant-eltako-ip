@@ -14,6 +14,7 @@ from .exceptions import (
     DeviceNotFoundError,
     EltakoConnectionError,
     EltakoError,
+    UnsupportedCommandError,
 )
 from .models import (
     AutomationAddOn,
@@ -751,8 +752,25 @@ class EltakoClient:
         )
         return AutomationRule.from_dict(data)
 
-    async def create_automation(self, rule: AutomationRule) -> AutomationRule:
+    def _validate_automation(self, rule: AutomationRule) -> None:
+        """Validate a rule against the spec tables before writing.
+
+        Raises UnsupportedCommandError listing every problem found.
+        """
+        from .automations import validate_rule
+
+        problems = validate_rule(rule)
+        if problems:
+            raise UnsupportedCommandError(
+                "Automation rule failed spec validation: " + "; ".join(problems)
+            )
+
+    async def create_automation(
+        self, rule: AutomationRule, validate: bool = True
+    ) -> AutomationRule:
         """Create a new on-device hardware binding automation."""
+        if validate:
+            self._validate_automation(rule)
         data = await self._request(
             "POST",
             "/services/eltako/automations",
@@ -762,8 +780,12 @@ class EltakoClient:
             return AutomationRule.from_dict(data)
         return rule
 
-    async def update_automation(self, rule: AutomationRule) -> bool:
+    async def update_automation(
+        self, rule: AutomationRule, validate: bool = True
+    ) -> bool:
         """Update an existing on-device automation rule."""
+        if validate:
+            self._validate_automation(rule)
         res = await self._request(
             "PUT",
             f"/services/eltako/automations/{rule.automation_guid}",
@@ -805,6 +827,9 @@ class EltakoClient:
                 existing_timer = rule.get_addon("offTimer")
                 if existing_timer is not None:
                     new_addons.append(existing_timer)
+        else:
+            # Without any timer, prewarning has nothing to warn about.
+            new_addons = [a for a in new_addons if a.type != "prewarning"]
 
         updated = AutomationRule(
             automation_guid=rule.automation_guid,
