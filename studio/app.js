@@ -47,6 +47,8 @@ const STRINGS = {
     titleNew: "New rule",
     titleEdit: "Edit rule",
     fixBeforeSave: "Please fix before saving:",
+    hintInputChar: "Only characteristics this input actually reports.",
+    eudNote: "Dimmer rules are read-only in this studio version — saving would wipe the dimmer ramp configuration.",
     confirmDelete: "Delete this on-device rule?",
     confirmReset: "Reset all on-device automations to factory defaults?",
     noDevices: "No devices available",
@@ -58,6 +60,7 @@ const STRINGS = {
     kindWired: "Wired input",
     kindWindow: "FTK window",
     kindRocker: "EnOcean rocker",
+    kindSensor: "Sensor",
     pillOff: (s) => `Off-Timer: ${s}s`,
     pillLong: (s) => `Long-press: ${s}s`,
     pillPre: "Prewarning flicker",
@@ -115,6 +118,8 @@ const STRINGS = {
     titleNew: "Neue Regel",
     titleEdit: "Regel bearbeiten",
     fixBeforeSave: "Bitte vor dem Speichern beheben:",
+    hintInputChar: "Nur Merkmale, die dieser Eingang tatsächlich meldet.",
+    eudNote: "Dimmregeln sind in dieser Version schreibgeschützt – Speichern würde die Rampen-Konfiguration löschen.",
     confirmDelete: "Diese Geräteregel löschen?",
     confirmReset: "Alle Geräteregeln auf Werkseinstellung zurücksetzen?",
     noDevices: "Keine Geräte verfügbar",
@@ -126,6 +131,7 @@ const STRINGS = {
     kindWired: "Drahteingang",
     kindWindow: "FTK-Fenster",
     kindRocker: "EnOcean-Wippe",
+    kindSensor: "Sensor",
     pillOff: (s) => `Timer: ${s}s`,
     pillLong: (s) => `Langdruck: ${s}s`,
     pillPre: "Vorwarnung",
@@ -142,7 +148,23 @@ const STRINGS = {
   },
 };
 
-const state = { rules: [], devices: [], enocean: [], editing: null };
+const LOGIC_LABEL_I18N = {
+  buttonImpulseSwitch: { en: "Impulse switch (Taster)", de: "Impulsschalter (Taster)" },
+  buttonSwitch: { en: "Switch (Kippschalter)", de: "Schalter (Kippschalter)" },
+  buttonNormallyOpened: { en: "Momentary NO", de: "Schließer (NO)" },
+  buttonNormallyClosed: { en: "Momentary NC", de: "Öffner (NC)" },
+  target: { en: "Target value", de: "Zielwert" },
+  universalButtonDimmer: { en: "Universal dimmer", de: "Universal-Dimmer" },
+  directionalUpButtonDimmer: { en: "Up / dim up", de: "Hoch / hochdimmen" },
+  directionalDownButtonDimmer: { en: "Down / dim down", de: "Runter / runterdimmen" },
+  centralUpButtonDimmer: { en: "Central on", de: "Zentral ein" },
+  centralDownButtonDimmer: { en: "Central off", de: "Zentral aus" },
+  sceneButtonDimmer: { en: "Scene dimmer", de: "Szenen-Dimmer" },
+};
+
+const logicLabel = (value) => LOGIC_LABEL_I18N[value]?.[lang] || value;
+
+const state = { rules: [], devices: [], enocean: [], caps: null, editing: null };
 let lang = localStorage.getItem("studio-lang") || "en";
 if (!STRINGS[lang]) lang = "en";
 
@@ -161,14 +183,84 @@ async function api(path, opts) {
   return data;
 }
 
-function logicLabels() {
-  return {
-    buttonImpulseSwitch: t("logicImpulseShort"),
-    buttonSwitch: t("logicSwitchShort"),
-    buttonNormallyOpened: t("logicNOShort"),
-    buttonNormallyClosed: t("logicNCShort"),
-    target: t("logicTargetShort"),
-  };
+/* --- Capability-driven editor -------------------------------------------
+ * Dropdowns and addon rows are built from GET /api/capabilities so only
+ * identifiers, logics and addOns the paired hardware actually supports
+ * are offered. Unknown classes render read-only. */
+
+const caps = () => state.caps || { triggers: [], targets: [], logicsByClass: {}, addonsByClass: {} };
+
+function triggerDevices() {
+  const seen = new Map();
+  for (const trg of caps().triggers) {
+    if (!seen.has(trg.deviceGuid)) seen.set(trg.deviceGuid, trg.displayName);
+  }
+  return [...seen.entries()].map(([deviceGuid, displayName]) => ({ deviceGuid, displayName }));
+}
+
+function inputChars(guid) {
+  return caps().triggers.filter((trg) => trg.deviceGuid === guid).map((trg) => trg.identifier);
+}
+
+function targetDevices() {
+  const seen = new Map();
+  for (const tgt of caps().targets) {
+    if (!seen.has(tgt.deviceGuid)) seen.set(tgt.deviceGuid, tgt.displayName);
+  }
+  return [...seen.entries()].map(([deviceGuid, displayName]) => ({ deviceGuid, displayName }));
+}
+
+function outputChars(guid) {
+  return caps().targets.filter((tgt) => tgt.deviceGuid === guid);
+}
+
+function targetClass(guid, ident) {
+  return caps().targets.find((tgt) => tgt.deviceGuid === guid && tgt.identifier === ident)?.deviceClass || "unknown";
+}
+
+function selectedTargetClass() {
+  return targetClass($("fOutput").value, $("fOutputChar").value);
+}
+
+function setSelect(sel, value) {
+  const opts = [...sel.options].map((o) => o.value);
+  sel.value = opts.includes(value) ? value : (opts[0] || "");
+}
+
+function syncInputChars(keep) {
+  const sel = $("fInputChar");
+  const cur = keep || sel.value;
+  sel.innerHTML = inputChars($("fInput").value).map((c) => `<option value="${c}">${c}</option>`).join("");
+  setSelect(sel, cur);
+}
+
+function syncOutput(keepChar, keepLogic) {
+  const co = $("fOutputChar");
+  const curChar = keepChar || co.value;
+  co.innerHTML = outputChars($("fOutput").value).map((tgt) => `<option value="${tgt.identifier}">${tgt.identifier} (${tgt.deviceClass})</option>`).join("");
+  setSelect(co, curChar);
+  syncLogics(keepLogic);
+}
+
+function syncLogics(keep) {
+  const sel = $("fLogic");
+  const cur = keep || sel.value;
+  const logics = caps().logicsByClass[selectedTargetClass()] || [];
+  sel.innerHTML = logics.map((l) => `<option value="${l}">${logicLabel(l)}</option>`).join("");
+  if (!logics.length) sel.innerHTML = `<option value="${cur}">${logicLabel(cur)}</option>`;
+  setSelect(sel, cur);
+  updateAddonVisibility();
+}
+
+function updateAddonVisibility() {
+  const addons = new Set(caps().addonsByClass[selectedTargetClass()] || []);
+  $("rOff").hidden = !addons.has("offTimer");
+  $("rLong").hidden = !addons.has("longPressOffTimer");
+  $("rPre").hidden = !addons.has("prewarning");
+  $("rTarget").hidden = !addons.has("targetValue");
+  const eud = selectedTargetClass() === "EUD";
+  $("eudNote").hidden = !eud;
+  if (eud) $("eudNote").textContent = t("eudNote");
 }
 
 function deviceName(guid) {
@@ -180,10 +272,12 @@ function deviceName(guid) {
 }
 
 function inputKind(rule) {
-  const c = rule.configuration.inputCharacteristicIdentifier;
-  if (c === "contact") return t("kindWindow");
+  const c = rule.configuration.inputCharacteristicIdentifier || "";
+  if (c === "contact" || c === "windowDoorContact") return t("kindWindow");
   if (c.startsWith("button")) return t("kindRocker");
-  return t("kindWired");
+  if (c.startsWith("input")) return t("kindWired");
+  if (/motion|smoke|water|rain|temperature|humidity|illumination|co2|tvoc/.test(c)) return t("kindSensor");
+  return c;
 }
 
 function addonPills(rule) {
@@ -232,6 +326,9 @@ async function refresh() {
   state.rules = rules;
   state.devices = Array.isArray(devices) ? devices : devices.devices || [];
   state.enocean = enocean;
+  try {
+    state.caps = await api("/api/capabilities");
+  } catch { state.caps = null; }
   const modeEl = $("mode");
   modeEl.textContent = status.mode || "mock";
   modeEl.classList.toggle("live", status.mode === "live");
@@ -251,7 +348,6 @@ function render() {
     listEl.appendChild(div);
     return;
   }
-  const labels = logicLabels();
   for (const rule of state.rules) {
     const cfg = rule.configuration;
     const card = document.createElement("div");
@@ -267,7 +363,7 @@ function render() {
       ${tmplPill}
       <span class="pill" title="${t("tipInput")}">${inputKind(rule)} · ${deviceName(cfg.inputDeviceGuid)}</span>
       <span class="arrow">──►</span>
-      <span class="pill logic" title="${t("tipLogic")}">${labels[cfg.logic] || cfg.logic}</span>
+      <span class="pill logic" title="${t("tipLogic")}">${logicLabel(cfg.logic)}</span>
       ${pillsHtml}
       <span class="arrow">──►</span>
       <span class="pill" title="${t("tipOutput")}">${deviceName(cfg.outputDeviceGuid)} · ${cfg.outputCharacteristicIdentifier}</span>
@@ -310,24 +406,20 @@ function render() {
 }
 
 function fillDeviceSelects() {
-  const inputs = [...state.devices, ...state.enocean.map((e) => ({
-    deviceGuid: e.deviceGuid, displayName: `EnOcean ${e.eurId || e.deviceGuid.slice(0, 8)}`,
-  }))];
-  const outputs = state.devices.filter((d) =>
-    (d.functions || []).some((f) => f.identifier === "relay") || /ESR/i.test(d.displayName || ""));
   const fI = $("fInput"), fO = $("fOutput");
-  fI.innerHTML = inputs.map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
-  const outList = outputs.length ? outputs : state.devices;
-  fO.innerHTML = outList.map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
+  fI.innerHTML = triggerDevices().map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
+  fO.innerHTML = targetDevices().map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
+  syncInputChars();
+  syncOutput();
 }
 
 function ruleToForm(rule) {
   const cfg = rule.configuration;
   const get = (t2) => (cfg.addOns || []).find((a) => a.type === t2);
-  $("fInput").value = cfg.inputDeviceGuid;
-  $("fInputChar").value = cfg.inputCharacteristicIdentifier;
-  $("fOutput").value = cfg.outputDeviceGuid;
-  $("fLogic").value = cfg.logic;
+  setSelect($("fInput"), cfg.inputDeviceGuid);
+  syncInputChars(cfg.inputCharacteristicIdentifier);
+  setSelect($("fOutput"), cfg.outputDeviceGuid);
+  syncOutput(cfg.outputCharacteristicIdentifier, cfg.logic);
   $("fOff").value = get("offTimer") ? Math.round(get("offTimer").time / 1000) : 0;
   $("fLong").value = get("longPressOffTimer") ? Math.round(get("longPressOffTimer").time / 1000) : 0;
   $("fPre").checked = !!get("prewarning");
@@ -355,7 +447,7 @@ function formToPayload() {
       inputDeviceGuid: $("fInput").value,
       inputCharacteristicIdentifier: $("fInputChar").value,
       outputDeviceGuid: $("fOutput").value,
-      outputCharacteristicIdentifier: "relay",
+      outputCharacteristicIdentifier: $("fOutputChar").value || "relay",
       addOns,
       logicConfiguration: {},
     },
@@ -374,10 +466,13 @@ function openEditor(rule) {
 }
 
 function prefillForm(v) {
-  if (v.inputGuid) $("fInput").value = v.inputGuid;
-  if (v.inputChar) $("fInputChar").value = v.inputChar;
-  if (v.outputGuid) $("fOutput").value = v.outputGuid;
-  if (v.logic) $("fLogic").value = v.logic;
+  if (v.inputGuid) setSelect($("fInput"), v.inputGuid);
+  syncInputChars(v.inputChar);
+  if (v.outputGuid) setSelect($("fOutput"), v.outputGuid);
+  syncOutput(undefined, v.logic);
+  if (v.inputChar) setSelect($("fInputChar"), v.inputChar);
+  if (v.logic) setSelect($("fLogic"), v.logic);
+  updateAddonVisibility();
   if (v.off !== undefined) $("fOff").value = v.off;
   if (v.long !== undefined) $("fLong").value = v.long;
   if (v.pre !== undefined) $("fPre").checked = v.pre;
@@ -385,25 +480,29 @@ function prefillForm(v) {
   $("fActive").checked = v.active !== false;
 }
 
-function wiredInput() {
-  return state.devices.find((d) => /wired input/i.test(d.displayName || ""))
-    || state.devices[1] || state.devices[0];
+/* Trigger resolution from capabilities (falls back to paired devices). */
+function capTrigger(pred) {
+  return (state.caps?.triggers || []).find(pred) || null;
 }
 
-function relayOutput() {
-  return state.devices.find((d) => /ESR/i.test(d.displayName || ""))
-    || state.devices[0];
+function wiredTrigger() {
+  return capTrigger((x) => /wired/i.test(x.displayName))
+    || capTrigger((x) => x.identifier === "input")
+    || capTrigger(() => true);
 }
 
-function windowDevice() {
-  return state.devices.find((d) => (d.infos || []).some((f) => f.identifier === "contact"))
-    || state.devices.find((d) => /window|fenster|ftk/i.test(d.displayName || ""))
-    || null;
+function relayTarget() {
+  const tgts = state.caps?.targets || [];
+  return tgts.find((x) => /ESR/i.test(x.displayName)) || tgts[0] || null;
 }
 
-function enoceanInput() {
-  const eo = state.enocean[0];
-  return eo ? { deviceGuid: eo.deviceGuid } : wiredInput();
+function contactTrigger() {
+  return capTrigger((x) => x.identifier === "contact")
+    || capTrigger((x) => /contact/i.test(x.identifier));
+}
+
+function buttonTrigger() {
+  return capTrigger((x) => /^button/i.test(x.identifier)) || wiredTrigger();
 }
 
 /* One-click templates. Each prefills the editor (nothing is saved until
@@ -420,49 +519,67 @@ const TEMPLATES = [
     en: { name: "Template: Staircase + prewarning", desc: "Treppenlicht: on with short press, auto-off after 10s, 3× flicker warning." },
     de: { name: "Vorlage: Treppenlicht + Vorwarnung", desc: "Bei Kurzdruck ein, nach 10s automatisch aus, 3× Flackern als Warnung." },
     description: "staircase+prewarning",
-    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 10, long: 0, pre: true }),
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 10, long: 0, pre: true };
+    },
   },
   {
     id: "toggle",
     en: { name: "Template: Pushbutton toggle", desc: "Taster: each press toggles the relay, no timer." },
     de: { name: "Vorlage: Taster-Umschaltung", desc: "Jeder Tastendruck schaltet das Relais um, ohne Timer." },
     description: "pushbutton-toggle",
-    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false }),
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false };
+    },
   },
   {
     id: "rocker",
     en: { name: "Template: Rocker switch", desc: "Kippschalter: output follows press and release." },
     de: { name: "Vorlage: Kippschalter", desc: "Der Ausgang folgt Druck und Loslassen der Wippe." },
     description: "rocker-switch",
-    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false }),
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false };
+    },
   },
   {
     id: "longpress",
     en: { name: "Template: Long-press timer", desc: "Short press toggles, long press starts a 60s auto-off timer." },
     de: { name: "Vorlage: Langdruck-Timer", desc: "Kurzdruck schaltet um, Langdruck startet 60s-Timer." },
     description: "longpress-timer",
-    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 60, pre: false }),
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 60, pre: false };
+    },
   },
   {
     id: "window",
     en: { name: "Template: Window contact", desc: "FTK contact drives the relay (follows open/close)." },
     de: { name: "Vorlage: Fensterkontakt", desc: "FTK-Kontakt steuert das Relais (folgt Auf/Zu)." },
     description: "window-contact",
-    values: () => ({ inputGuid: windowDevice()?.deviceGuid || wiredInput()?.deviceGuid, inputChar: "contact", outputGuid: relayOutput()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false }),
+    values: () => {
+      const c = contactTrigger() || wiredTrigger();
+      return { inputGuid: c?.deviceGuid, inputChar: c?.identifier || "contact", outputGuid: relayTarget()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false };
+    },
   },
   {
     id: "enocean",
-    en: { name: "Template: EnOcean rocker", desc: "Paired wireless rocker (buttonA0) toggles the relay." },
-    de: { name: "Vorlage: EnOcean-Wippe", desc: "Gekoppelte Funkwippe (buttonA0) schaltet das Relais." },
+    en: { name: "Template: EnOcean rocker", desc: "Paired wireless rocker toggles the relay." },
+    de: { name: "Vorlage: EnOcean-Wippe", desc: "Gekoppelte Funkwippe schaltet das Relais." },
     description: "enocean-rocker",
-    values: () => ({ inputGuid: enoceanInput()?.deviceGuid, inputChar: "buttonA0", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false }),
+    values: () => {
+      const b = buttonTrigger();
+      return { inputGuid: b?.deviceGuid, inputChar: b?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false };
+    },
   },
 ];
 
 const picker = $("picker"), tmplList = $("tmplList");
 
 function openPicker() {
-  if (!state.devices.length) { alert(t("noDevices")); return; }
+  if (!triggerDevices().length || !targetDevices().length) { alert(t("noDevices")); return; }
   fillDeviceSelects();
   tmplList.innerHTML = "";
   for (const tmpl of TEMPLATES) {
@@ -486,6 +603,9 @@ function openPicker() {
 }
 
 $("new").addEventListener("click", () => openPicker());
+$("fInput").addEventListener("change", () => syncInputChars());
+$("fOutput").addEventListener("change", () => syncOutput());
+$("fOutputChar").addEventListener("change", () => syncLogics());
 
 document.querySelectorAll("dialog").forEach((dlg) => {
   dlg.querySelectorAll('button[value="cancel"]').forEach((btn) =>
@@ -496,6 +616,7 @@ $("lang").addEventListener("change", async (e) => {
   lang = e.target.value;
   applyI18n();
   $("count").textContent = t("count")(state.rules.length);
+  if (editor.open) syncLogics($("fLogic").value);
   render();
 });
 
@@ -503,6 +624,10 @@ $("save").addEventListener("click", async (e) => {
   e.preventDefault();
   try {
     const payload = formToPayload();
+    if (selectedTargetClass() === "EUD") {
+      showProblems([t("eudNote")]);
+      return;
+    }
     const check = await api("/api/validate", { method: "POST", body: JSON.stringify(payload) }).catch(() => ({ ok: true, problems: [] }));
     if (!check.ok) {
       showProblems(check.problems || []);

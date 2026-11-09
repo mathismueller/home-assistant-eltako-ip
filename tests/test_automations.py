@@ -12,6 +12,7 @@ from aioeltako_ip import (
     AutomationRule,
     EltakoClient,
     UnsupportedCommandError,
+    build_capabilities,
     validate_rule,
 )
 
@@ -133,6 +134,81 @@ def test_eud_unsupported_extension_rejected():
     )
     problems = validate_rule(rule)
     assert any("slumberExtension" in p for p in problems)
+
+
+def _cap_devices():
+    return [
+        {
+            "deviceGuid": "out-1",
+            "productGuid": "prod-esr",
+            "displayName": "Relay",
+            "functions": [{"identifier": "relay", "value": "on"}],
+            "infos": [],
+        },
+        {
+            "deviceGuid": "in-1",
+            "productGuid": "prod-wired64",
+            "displayName": "Wired input",
+            "functions": [{"identifier": "inputChannel1", "value": "x"}],
+            "infos": [{"identifier": "connectionStatus", "value": "online"}],
+        },
+    ]
+
+
+def _cap_products():
+    return {
+        "products": [
+            {
+                "productGuid": "prod-wired64",
+                "name": "Wired input 64",
+                "features": [
+                    {
+                        "characteristics": [
+                            {"identifier": "inputChannel1"},
+                            {"identifier": "inputChannel2"},
+                            {"identifier": "inputBridged"},
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def test_build_capabilities_offers_only_valid_options():
+    caps = build_capabilities(_cap_devices(), _cap_products())
+    trigger_ids = {(t["deviceGuid"], t["identifier"]) for t in caps["triggers"]}
+    # live + product-spec union for the 64-style wired input
+    assert ("in-1", "inputChannel1") in trigger_ids
+    assert ("in-1", "inputChannel2") in trigger_ids
+    assert ("in-1", "inputBridged") in trigger_ids
+    # meta and outputs are never triggers
+    assert not any(t["identifier"] == "connectionStatus" for t in caps["triggers"])
+    assert not any(t["identifier"] == "relay" for t in caps["triggers"])
+    # targets carry their actuator class
+    assert caps["targets"] == [
+        {
+            "deviceGuid": "out-1",
+            "displayName": "Relay",
+            "identifier": "relay",
+            "deviceClass": "ESR",
+        }
+    ]
+    assert "buttonImpulseSwitch" in caps["logicsByClass"]["ESR"]
+    assert "offTimer" in caps["addonsByClass"]["ESR"]
+    assert caps["specVersion"]
+
+
+def test_build_capabilities_accepts_all_product_shapes():
+    devices = _cap_devices()
+    by_guid = {p["productGuid"]: p for p in _cap_products()["products"]}
+    assert build_capabilities(devices, by_guid)["triggers"] == build_capabilities(
+        devices, _cap_products()
+    )["triggers"]
+    assert (
+        build_capabilities(devices, _cap_products()["products"])["triggers"]
+        == build_capabilities(devices, _cap_products())["triggers"]
+    )
 
 
 @pytest.mark.asyncio

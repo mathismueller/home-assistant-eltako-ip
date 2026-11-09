@@ -16,7 +16,7 @@ Design rules:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .models import AutomationRule
@@ -25,11 +25,57 @@ SPEC_VERSION = "series64ipm/1.3.0"
 
 # Output characteristic -> actuator class, per spec examples
 # (relay: ESR, targetPosition: ESB, targetBrightness: EUD).
+# Multichannel relays expose per-channel identifiers.
 OUTPUT_CLASS_BY_CHARACTERISTIC = {
     "relay": "ESR",
+    "relayChannel1": "ESR",
+    "relayChannel2": "ESR",
     "targetPosition": "ESB",
     "targetBrightness": "EUD",
 }
+
+# Characteristic identifiers that can never trigger a rule: connection and
+# device-meta status, calibration offsets, device range metadata, power
+# telemetry, actuator settings, and live values. Anything else is offered
+# as a trigger: per spec, "the modification of a characteristic (e.g. motion
+# detected) can trigger an automation".
+NON_TRIGGER_IDENTIFIERS = frozenset(
+    {
+        "connectionStatus",
+        "temperatureOffset",
+        "humidityOffset",
+        "testModeStatus",
+        "faultStatus",
+        "serviceLifeTime",
+        "energyHarvestingActive",
+        "energyBufferChargeLevel",
+        "batteryChargeLevel",
+        "batteryPercentageRemaining",
+        "batteryVoltage",
+        "supplyVoltage",
+        "controlHierarchy",
+        "motionDetectionMode",
+        "edgeMode",
+        "dimCurve",
+        "runtimeMode",
+        "movementDirection",
+        "enableTilt",
+        "maxRuntime",
+        "runtime",
+        "offset",
+        "tiltRuntime",
+        "power",
+        "currentBrightness",
+        "lastBrightness",
+        "minimumBrightness",
+        "maximumBrightness",
+        "currentPosition",
+        "currentTilt",
+    }
+)
+
+# Prefixes of device range metadata (e.g. minimumDeviceTemperature).
+NON_TRIGGER_PREFIXES = ("minimum", "maximum")
 
 # Logics per actuator class, per spec ("Logic" section for ESR/ESB,
 # "EUD Automation Logic" table for EUD).
@@ -123,6 +169,120 @@ def device_class_for_output(output_characteristic: str) -> Optional[str]:
     which case validation is skipped (forward compatibility).
     """
     return OUTPUT_CLASS_BY_CHARACTERISTIC.get(output_characteristic)
+
+
+def _is_trigger_identifier(identifier: str) -> bool:
+    """Decide whether a characteristic identifier is a plausible trigger."""
+    if not identifier:
+        return False
+    if identifier in OUTPUT_CLASS_BY_CHARACTERISTIC:
+        return False
+    if identifier in NON_TRIGGER_IDENTIFIERS:
+        return False
+    return not identifier.startswith(NON_TRIGGER_PREFIXES)
+
+
+def _product_characteristics(products_raw: Any) -> dict[str, list[str]]:
+    """Map productGuid -> characteristic identifiers from /products data.
+
+    Accepts the shapes gateways return: ``{"products": [...]}``, a bare
+    list, or a ``{guid: product}`` dict.
+    """
+    items: Any = products_raw
+    if isinstance(items, dict):
+        items = items.get("products", list(items.values()))
+    result: dict[str, list[str]] = {}
+    if not isinstance(items, list):
+        return result
+    for product in items:
+        if not isinstance(product, dict) or "productGuid" not in product:
+            continue
+        identifiers: list[str] = []
+        for feature in product.get("features", []):
+            if not isinstance(feature, dict):
+                continue
+            for char in feature.get("characteristics", []):
+                if isinstance(char, dict) and char.get("identifier"):
+                    identifiers.append(str(char["identifier"]))
+        result[str(product["productGuid"])] = identifiers
+    return result
+
+
+def build_capabilities(devices_raw: Any, products_raw: Any) -> dict[str, Any]:
+    """Enumerate valid automation triggers and targets from gateway data.
+
+    Takes raw ``/devices`` (list) and ``/products`` data and returns::
+
+        {
+          "triggers": [{"deviceGuid", "displayName", "identifier"}],
+          "targets": [{"deviceGuid", "displayName", "identifier",
+                       "deviceClass"}],
+          "logicsByClass": {"ESR": [...], ...},
+          "addonsByClass": {"ESR": [...], ...},
+          "specVersion": ...,
+        }
+
+    Triggers union live characteristics with the device model's product-spec
+    characteristics (so e.g. all ``inputChannel``/``buttonChannel`` variants
+    of the paired hardware are offered), minus meta identifiers. Targets are
+    live output functions with a known actuator class only.
+    """
+    triggers: list[dict[str, str]] = []
+    targets: list[dict[str, str]] = []
+    seen_triggers: set[tuple[str, str]] = set()
+    spec_chars = _product_characteristics(products_raw)
+
+    devices = devices_raw if isinstance(devices_raw, list) else []
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        guid = str(device.get("deviceGuid", ""))
+        name = str(device.get("displayName") or guid[:8])
+        if not guid:
+            continue
+        live_ids: list[str] = []
+        for section in ("functions", "infos"):
+            chars = device.get(section, [])
+            if isinstance(chars, list):
+                live_ids.extend(
+                    str(c.get("identifier"))
+                    for c in chars
+                    if isinstance(c, dict) and c.get("identifier")
+                )
+        for ident in live_ids + spec_chars.get(str(device.get("productGuid", "")), []):
+            if _is_trigger_identifier(ident) and (guid, ident) not in seen_triggers:
+                seen_triggers.add((guid, ident))
+                triggers.append(
+                    {"deviceGuid": guid, "displayName": name, "identifier": ident}
+                )
+        for char in device.get("functions", []):
+            if not isinstance(char, dict):
+                continue
+            ident = str(char.get("identifier", ""))
+            cls = OUTPUT_CLASS_BY_CHARACTERISTIC.get(ident)
+            if cls and not any(
+                t["deviceGuid"] == guid and t["identifier"] == ident for t in targets
+            ):
+                targets.append(
+                    {
+                        "deviceGuid": guid,
+                        "displayName": name,
+                        "identifier": ident,
+                        "deviceClass": cls,
+                    }
+                )
+
+    return {
+        "triggers": triggers,
+        "targets": targets,
+        "logicsByClass": {
+            cls: sorted(logics) for cls, logics in LOGICS_BY_CLASS.items()
+        },
+        "addonsByClass": {
+            cls: sorted(addons) for cls, addons in ADDONS_BY_CLASS.items()
+        },
+        "specVersion": SPEC_VERSION,
+    }
 
 
 def validate_rule(

@@ -148,12 +148,13 @@ class StudioState:
         self.automations: list[dict] = load_fixture("automations", [])
         self.devices: list[dict] = load_fixture("devices", [])
         self.enocean_devices: list[dict] = load_fixture("enocean_devices", [])
-        # products.json is a dict keyed by guid in local dumps; normalize to list
+        # products.json is {"products": [...]} on gateways; normalize to list
         raw_products = load_fixture("products", [])
         if isinstance(raw_products, dict):
-            self.products: list[dict] = list(raw_products.values())
-        else:
-            self.products = raw_products
+            raw_products = raw_products.get("products", list(raw_products.values()))
+        self.products: list[dict] = (
+            list(raw_products) if isinstance(raw_products, list) else []
+        )
 
     # -- automations ------------------------------------------------------
     def list_automations(self):
@@ -253,6 +254,21 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send_json(self.state.enocean_devices)
         if parsed.path == "/api/products":
             return self._send_json(self.state.products)
+        if parsed.path == "/api/capabilities":
+            try:
+                build_capabilities = _automations.build_capabilities
+            except (AttributeError, NameError):
+                return self._send_json({"error": "capabilities unavailable"}, 501)
+            if self.state.live:
+                try:
+                    devices = self.state.live._call("GET", "/devices")
+                    products = self.state.live._call("GET", "/products")
+                except Exception as err:  # noqa: BLE001
+                    return self._send_json({"error": str(err)}, 502)
+                return self._send_json(build_capabilities(devices, products))
+            return self._send_json(
+                build_capabilities(self.state.devices, self.state.products)
+            )
         if parsed.path in ("/", "/index.html"):
             self.path = "/index.html"
         return super().do_GET()

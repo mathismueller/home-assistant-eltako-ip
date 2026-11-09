@@ -127,35 +127,26 @@
   <form method="dialog" id="form">
     <label><span data-i18n="fInput">Input device</span><select id="fInput" required></select></label>
     <label><span data-i18n="fInputChar">Input characteristic</span>
-      <select id="fInputChar">
-        <option value="input" data-i18n="inWired">input (wired dry contact)</option>
-        <option value="contact" data-i18n="inContact">contact (FTK window)</option>
-        <option value="buttonA0" data-i18n="inA0">buttonA0 (EnOcean rocker)</option>
-        <option value="buttonA1" data-i18n="inA1">buttonA1 (EnOcean rocker)</option>
-      </select>
+      <select id="fInputChar"></select>
+      <small class="hint" data-i18n="hintInputChar"></small>
     </label>
     <label><span data-i18n="fOutput">Output actuator</span><select id="fOutput" required></select></label>
     <label><span data-i18n="fOutputChar">Output characteristic</span>
-      <select id="fOutputChar"><option value="relay">relay</option></select>
+      <select id="fOutputChar"></select>
     </label>
     <label><span data-i18n="fLogic">Logic</span>
-      <select id="fLogic">
-        <option value="buttonImpulseSwitch" data-i18n="logicImpulse">Impulse switch (Taster)</option>
-        <option value="buttonSwitch" data-i18n="logicSwitch">Switch (Kippschalter)</option>
-        <option value="buttonNormallyOpened" data-i18n="logicNO">Momentary NO</option>
-        <option value="buttonNormallyClosed" data-i18n="logicNC">Momentary NC</option>
-        <option value="target" data-i18n="logicTarget">Target value</option>
-      </select>
+      <select id="fLogic"></select>
       <small class="hint" data-i18n="hintLogic"></small>
     </label>
-    <label><span data-i18n="fOff">Off-timer (s, 0 = off)</span><input id="fOff" type="number" min="0" step="1" value="10" />
+    <label id="rOff"><span data-i18n="fOff">Off-timer (s, 0 = off)</span><input id="fOff" type="number" min="0" step="1" value="10" />
       <small class="hint" data-i18n="hintOff"></small></label>
-    <label><span data-i18n="fLong">Long-press off-timer (s, 0 = off)</span><input id="fLong" type="number" min="0" step="1" value="0" />
+    <label id="rLong"><span data-i18n="fLong">Long-press off-timer (s, 0 = off)</span><input id="fLong" type="number" min="0" step="1" value="0" />
       <small class="hint" data-i18n="hintLong"></small></label>
-    <label class="check"><input id="fPre" type="checkbox" checked /> <span data-i18n="fPre">Prewarning flicker (30s before off)</span>
+    <label class="check" id="rPre"><input id="fPre" type="checkbox" checked /> <span data-i18n="fPre">Prewarning flicker (30s before off)</span>
       <small class="hint" data-i18n="hintPre"></small></label>
-    <label><span data-i18n="fTarget">Target value 0–100 (for target logic)</span><input id="fTarget" type="number" min="0" max="100" value="100" />
+    <label id="rTarget"><span data-i18n="fTarget">Target value 0–100 (for target logic)</span><input id="fTarget" type="number" min="0" max="100" value="100" />
       <small class="hint" data-i18n="hintTarget"></small></label>
+    <div class="hint" id="eudNote" hidden></div>
     <label class="check"><input id="fActive" type="checkbox" checked /> <span data-i18n="fActive">Rule active</span></label>
     <div class="err" id="fErr"></div>
     <div class="row">
