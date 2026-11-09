@@ -24,7 +24,10 @@ const STRINGS = {
     pickerTarget: "Target device",
     pickerTemplate: "Template",
     readOnly: "read-only",
-    readOnlyTitle: "Mutations disabled by the server (--read-only)",    fInput: "Input device",
+    readOnlyTitle: "Mutations disabled — unlock editing to change rules",
+    unlockEdit: "Unlock editing",
+    lockEdit: "Lock read-only",
+    confirmUnlock: "Enable editing? In live mode, changes are written directly to the gateway.",    fInput: "Input device",
     fInputChar: "Input characteristic",
     fOutput: "Output actuator",
     fOutputChar: "Output characteristic",
@@ -103,7 +106,10 @@ const STRINGS = {
     pickerTarget: "Zielgerät",
     pickerTemplate: "Vorlage",
     readOnly: "nur Lesen",
-    readOnlyTitle: "Änderungen serverseitig deaktiviert (--read-only)",
+    readOnlyTitle: "Änderungen deaktiviert – zum Ändern Bearbeitung erlauben",
+    unlockEdit: "Bearbeitung erlauben",
+    lockEdit: "Schreibschutz aktivieren",
+    confirmUnlock: "Bearbeitung erlauben? Im Live-Modus werden Änderungen direkt aufs Gateway geschrieben.",
     fInput: "Eingang (Taster/Kontakt)",
     fInputChar: "Eingangsmerkmal",
     fOutput: "Aktor (Ausgang)",
@@ -399,6 +405,7 @@ async function refresh() {
   $("count").textContent = t("count")(rules.length);
   $("ro").hidden = !state.readOnly;
   $("ro").title = t("readOnlyTitle");
+  $("modeSwitch").textContent = state.readOnly ? t("unlockEdit") : t("lockEdit");
   for (const id of ["new", "reset"]) {
     $(id).disabled = state.readOnly;
     $(id).title = state.readOnly ? t("readOnlyTitle") : "";
@@ -856,6 +863,15 @@ function openPicker() {
 }
 
 $("new").addEventListener("click", () => openPicker());
+$("modeSwitch").addEventListener("click", async () => {
+  if (state.readOnly) {
+    if (!confirm(t("confirmUnlock"))) return;
+    await api("/api/mode", { method: "POST", body: JSON.stringify({ read_only: false }) });
+  } else {
+    await api("/api/mode", { method: "POST", body: JSON.stringify({ read_only: true }) });
+  }
+  await refresh();
+});
 $("fInput").addEventListener("change", () => syncInputChars());
 $("fOutput").addEventListener("change", () => syncOutput());
 $("fOutputChar").addEventListener("change", () => syncLogics());

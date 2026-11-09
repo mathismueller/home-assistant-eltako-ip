@@ -22,9 +22,9 @@ and the apiKey Authorization header so the browser never talks to the
 gateway directly (avoids CORS + cert issues).
 
 Usage:
-  python3 studio/server.py                  # mock on :8099
-  python3 studio/server.py --live           # live gateway from .env
-  python3 studio/server.py --live --read-only  # explore live box, block writes
+  python3 studio/server.py                  # mock on :8099, starts read-only
+  python3 studio/server.py --live           # live gateway from .env, read-only
+  python3 studio/server.py --live --read-write  # start unlocked
   python3 studio/server.py --port 8099 --live --host 192.168.1.100
 """
 
@@ -277,7 +277,8 @@ class Handler(SimpleHTTPRequestHandler):
     state: StudioState
     mode: str = "mock"
     gateway_host: str = ""
-    read_only: bool = False
+    # Always start locked; the UI mode switch unlocks explicitly.
+    read_only: bool = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STUDIO_DIR), **kwargs)
@@ -346,6 +347,8 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def _blocked_read_only(self, parsed) -> bool:
+        if parsed.path == "/api/mode":
+            return False
         if self.read_only and parsed.path.startswith("/api/automations"):
             self._send_json({"error": "read-only mode: mutations disabled"}, 403)
             return True
@@ -353,6 +356,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/mode":
+            try:
+                body = self._read_json()
+            except ValueError:
+                return self._send_json({"error": "invalid JSON"}, 400)
+            Handler.read_only = bool(body.get("read_only", True))
+            return self._send_json({"read_only": Handler.read_only})
         if parsed.path == "/api/validate":
             if validate_rule is None or AutomationRule is None:
                 return self._send_json({"ok": True, "problems": []})
@@ -430,9 +440,9 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8099)
     parser.add_argument("--live", action="store_true", help="proxy live gateway")
     parser.add_argument(
-        "--read-only",
+        "--read-write",
         action="store_true",
-        help="reject mutating calls (POST/PUT/DELETE on /api/automations)",
+        help="start unlocked (default is read-only, switchable in the UI)",
     )
     parser.add_argument("--host", default=os.environ.get("ELTAKO_HOST", ""))
     parser.add_argument("--gateway-port", type=int, default=int(os.environ.get("ELTAKO_PORT", "443")))
@@ -455,10 +465,10 @@ def main() -> None:
     Handler.state = StudioState(live)
     Handler.mode = mode
     Handler.gateway_host = args.host if live else "mock fixtures"
-    Handler.read_only = args.read_only
+    Handler.read_only = not args.read_write
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    ro = " read-only" if args.read_only else ""
+    ro = "" if args.read_write else " read-only"
     print(f"[studio] {mode}{ro} mode → http://127.0.0.1:{args.port}/")
     try:
         server.serve_forever()
