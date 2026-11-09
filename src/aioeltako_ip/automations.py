@@ -458,6 +458,20 @@ def validate_rule(
             "(no short press exists to arm it)."
         )
 
+    # longPressOffTimer is only armed by a long press, which exists solely
+    # in impulse/target logics (probed on live hardware: buttonSwitch,
+    # buttonNormallyOpened and buttonNormallyClosed reject it with
+    # "addon.type longPressOffTimer is not supported").
+    if rule.get_addon("longPressOffTimer") is not None and rule.logic not in (
+        "buttonImpulseSwitch",
+        "target",
+        "buttonTargetValue",
+    ):
+        errors.append(
+            "longPressOffTimer is only supported for buttonImpulseSwitch "
+            f"and target logic, not {rule.logic!r} (spec {SPEC_VERSION})."
+        )
+
     # Spec: prewarning "is to be combined with the offTimer addon or the
     # longPressOffTimer addon".
     if rule.get_addon("prewarning") is not None and (

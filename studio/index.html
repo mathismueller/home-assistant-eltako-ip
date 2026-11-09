@@ -43,6 +43,7 @@
   }
   .badge.live { color: var(--success-color); border-color: var(--success-color); }
   .badge.pulse { animation: pulse 1.2s ease-in-out infinite; }
+  .badge.alpha { color: #b7791f; border-color: #b7791f; }
   @keyframes pulse { 50% { opacity: .45; } }
   .spacer { flex: 1; }
   button, select, input {
@@ -61,8 +62,7 @@
   button:active { transform: scale(.98); }
   button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
   button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
-  #tmplList button:hover, #tgtList button:hover { box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-  #tgtList button.selected:hover { border-color: var(--primary-color); }
+  #tmplList button:hover { box-shadow: 0 1px 6px rgba(0,0,0,.18); }
   .card { transition: border-color .12s ease; }
   .card:hover { border-color: var(--secondary-text-color); }
   @media (prefers-reduced-motion: reduce) {
@@ -100,7 +100,7 @@
   dialog::backdrop { background: rgba(0,0,0,.4); }
   dialog form { display: grid; gap: 10px; padding: 6px 0; }
   label { display: grid; gap: 4px; font-size: 13px; }
-  select, input[type=text], input[type=number] {
+  select, input[type=text], input[type=number], input[type=password] {
     background: transparent; border: 1px solid var(--divider-color);
     border-radius: 8px; padding: 8px 10px;
   }
@@ -108,46 +108,70 @@
   #tmplList button { text-align: left; display: grid; gap: 2px; padding: 10px 12px; }
   #tmplList button strong { font-size: 14px; }
   #tmplList button small { font-size: 12px; color: var(--secondary-text-color); }
-  #tgtList { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  #tgtList button.selected { border-color: var(--primary-color); color: var(--primary-color); }
   .groupLabel { font-size: 12px; color: var(--secondary-text-color); margin: 8px 0 4px; }
   .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .check small { flex-basis: 100%; }
+  .bigmode { font-size: 15px; font-weight: 600; padding: 10px 26px;
+    border-radius: 10px; min-width: 120px; }
+  .bigmode.live { background: var(--success-color); border-color: var(--success-color); color: #fff; }
+  .bigmode.demo { background: #b7791f; border-color: #b7791f; color: #fff; }
   .err { color: var(--error-color); font-size: 13px; min-height: 1em; }
 </style>
 </head>
 <body>
 <header>
   <h1>Eltako Automation Studio</h1>
-  <span id="mode" class="badge">…</span>
+  <span class="badge alpha">alpha</span>
   <span id="count" class="badge">…</span>
   <span id="wait" class="badge pulse" data-i18n="waiting">Waiting for gateway…</span>
   <span class="spacer"></span>
+  <button id="gwOpen" class="bigmode" data-i18n="gwTitle">Gateways</button>
   <select id="lang" aria-label="Language / Sprache">
     <option value="en">EN</option>
     <option value="de">DE</option>
   </select>
-  <button id="new" data-i18n="new" disabled>New rule</button>
-  <button id="reset" class="danger" data-i18n="reset" disabled>Reset</button>
 </header>
 <main>
   <div class="groupLabel" data-i18n="liveState">Live device state</div>
   <div id="devstates" style="display:grid;gap:12px"></div>
-  <div class="groupLabel" data-i18n="rulesTitle">On-device rules</div>
+  <div class="row" style="align-items:center">
+    <span class="groupLabel" style="margin:0" data-i18n="rulesTitle">On-device rules</span>
+    <span class="spacer"></span>
+    <button id="new" data-i18n="new" disabled>New rule</button>
+    <button id="reset" class="danger" data-i18n="reset" disabled>Reset</button>
+  </div>
   <div id="list"></div>
 </main>
-<p class="meta" style="max-width:980px;margin:0 auto;padding:0 20px 30px">
-  <span data-i18n="footer"></span>
-  Run <code>python3 studio/server.py</code> (mock) or with <code>--live</code> (gateway proxy).
-</p>
 
 <dialog id="picker">
   <h3 id="pickerTitle" style="margin:0 0 8px" data-i18n="pickerTitle">Choose a template</h3>
-  <div class="groupLabel" data-i18n="pickerTarget">Target device</div>
-  <div id="tgtList"></div>
   <div class="groupLabel" data-i18n="pickerTemplate">Template</div>
   <div id="tmplList" style="display:grid;gap:8px"></div>
   <div class="row" style="margin-top:12px">
+    <span class="spacer"></span>
+    <button value="cancel" data-i18n="cancel">Cancel</button>
+  </div>
+</dialog>
+
+<dialog id="gateways">
+  <div class="row" style="align-items:center">
+    <h3 style="margin:0" data-i18n="gwTitle">Gateways</h3>
+    <span class="spacer"></span>
+    <span id="gwScanState" class="badge pulse" data-i18n="gwScanning">Scanning…</span>
+  </div>
+  <div id="gwList" style="display:grid;gap:8px;margin-top:8px"></div>
+  <div class="groupLabel" data-i18n="gwManual">Manual entry</div>
+  <div class="row">
+    <input id="gwHost" type="text" style="flex:2;min-width:0" />
+    <input id="gwPort" type="number" value="443" min="1" max="65535" style="width:92px" />
+  </div>
+  <div class="row" style="margin-top:8px">
+    <input id="gwPop" type="password" autocomplete="off" style="flex:1;min-width:0" />
+    <button id="gwGo" data-i18n="gwConnect">Connect</button>
+  </div>
+  <div class="err" id="gwErr"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="gwScan" data-i18n="gwScan">Rescan</button>
     <span class="spacer"></span>
     <button value="cancel" data-i18n="cancel">Cancel</button>
   </div>
@@ -157,14 +181,18 @@
   <h3 id="editorTitle" style="margin:0 0 8px">Rule</h3>
   <form method="dialog" id="form">
     <label><span data-i18n="fDesc">Name</span><input id="fDesc" type="text" maxlength="128" />
-      <small class="hint" data-i18n="hintDesc"></small></label>    <label><span data-i18n="fInput">Input device</span><select id="fInput" required></select></label>
+      <small class="hint" data-i18n="hintDesc"></small></label>    <label><span data-i18n="fInput">Input device</span><select id="fInput" required></select>
+      <small class="hint" id="lockInput"></small></label>
     <label><span data-i18n="fInputChar">Input characteristic</span>
       <select id="fInputChar"></select>
       <small class="hint" data-i18n="hintInputChar"></small>
+      <small class="hint" id="lockInputChar"></small>
     </label>
-    <label><span data-i18n="fOutput">Output actuator</span><select id="fOutput" required></select></label>
+    <label><span data-i18n="fOutput">Output actuator</span><select id="fOutput" required></select>
+      <small class="hint" id="lockOutput"></small></label>
     <label><span data-i18n="fOutputChar">Output characteristic</span>
       <select id="fOutputChar"></select>
+      <small class="hint" id="lockOutputChar"></small>
     </label>
     <label><span data-i18n="fLogic">Logic</span>
       <select id="fLogic"></select>

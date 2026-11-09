@@ -19,10 +19,9 @@ const STRINGS = {
     infoTitle: "What do these settings mean?",
     infoStaircase: "Staircase + prewarning (Treppenlicht): a short press switches the relay on and it turns off automatically after the off-timer. With prewarning the relay flickers 3× starting 30s before expiry so you can press again. Runs entirely on-device — works even if Wi-Fi / Home Assistant is down.",
     infoTarget: "Target logic: moves the output to a fixed targetValue (0–100) instead of toggling. Without a target the device toggles between min/max. Use it for scenes, e.g. always switch on to 100%.",
-    footer: "Standalone dev harness. Same JSON contract as the future HA WebSocket API.",
     pickerTitle: "Choose a template",
-    pickerTarget: "Target device",
     pickerTemplate: "Template",
+    noTemplatesFit: "No templates fit this gateway's actuators.",
     fInput: "Input device",
     fInputChar: "Input characteristic",
     fOutput: "Output actuator",
@@ -35,7 +34,7 @@ const STRINGS = {
     fActive: "Rule active",
     hintLogic: "Impulse = pushbutton (Taster), Switch = rocker (Kippschalter), NO/NC = momentary contact, Target = fixed value.",
     hintOff: "Auto-off delay after a short press. 0 disables it.",
-    hintLong: "Separate auto-off timer armed by a long press.",
+    hintLong: "Separate auto-off timer armed by a long press (impulse/target logics only).",
     hintPre: "Flickers the relay 3× before the off-timer expires. Needs an off-timer > 30s to be useful.",
     hintTarget: "Relay: 0 = off, 1 = on. Blind/shutter: position 0–100.",
     inWired: "input (wired dry contact)",
@@ -58,15 +57,11 @@ const STRINGS = {
     descPlaceholder: "e.g. Staircase hallway",
     settingDefault: "Product default; live value not reported.",
     hintInputChar: "Only characteristics this input actually reports.",
+    singleOption: "Only one option on this gateway — selection disabled.",
     eudNote: "Dimmer rules are read-only in this studio version — saving would wipe the dimmer ramp configuration.",
     confirmDelete: "Delete this on-device rule?",
     confirmReset: "Reset all on-device automations to factory defaults?",
     noDevices: "No devices available",
-    logicImpulseShort: "Impulse Switch",
-    logicSwitchShort: "Switch",
-    logicNOShort: "Momentary NO",
-    logicNCShort: "Momentary NC",
-    logicTargetShort: "Target",
     kindWired: "Wired input",
     kindWindow: "FTK window",
     kindRocker: "EnOcean rocker",
@@ -75,8 +70,31 @@ const STRINGS = {
     pillLong: (s) => `Long-press: ${s}s`,
     pillPre: "Prewarning flicker",
     pillTarget: (v) => `Target ${v}`,
+    pillGateway: "gateway",
+    tipGateway: "Built into the gateway itself (actuator hardware).",
+    pillEnOcean: "EnOcean",
+    tipEnOcean: "Paired external EnOcean sensor.",
+    rename: "Rename",
+    tipRename: "Rename this device (stored on the gateway).",
     count: (n) => `${n} rule${n === 1 ? "" : "s"}`,
     tmpl: "Template",
+    modeLive: "Live",
+    modeDemo: "Demo",
+    modeToggleTitle: "Choose gateway to connect",
+    gwTitle: "Gateways",
+    gwManual: "Manual entry",
+    gwScan: "Rescan",
+    gwConnect: "Connect",
+    gwDemo: "Demo gateway",
+    gwDemoDesc: "Built-in fixture data, no hardware needed.",
+    gwConfigured: "configured",
+    gwHostPh: "hostname or IP",
+    gwPopPh: "device PIN (blank = configured)",
+    gwNeedHost: "Enter a hostname or IP first.",
+    gwScanning: "Scanning…",
+    gwNone: "No gateways found yet — still scanning…",
+    gwNoneIdle: "No gateways found.",
+    connecting: (n) => `Connecting to ${n}…`,
     tipInput: "Which physical input triggers the rule: wired dry contact, FTK window contact, or EnOcean rocker half.",
     tipOutput: "Which actuator output this rule drives (ESR relay channel).",
     tipLogic: "Impulse = action on button press. Switch = action on press AND release. NO = output normally open: press closes, release reopens. NC = the reverse. Target = fixed value; without one it toggles min/max.",
@@ -99,10 +117,9 @@ const STRINGS = {
     infoTitle: "Was bedeuten diese Einstellungen?",
     infoStaircase: "Treppenlicht + Vorwarnung: Kurzer Druck schaltet das Relais ein, nach der Ausschaltverzögerung geht es automatisch aus. Mit Vorwarnung flackert das Relais 30s vor Ablauf 3×, damit man erneut drücken kann. Läuft komplett im Gerät – auch ohne WLAN / Home Assistant.",
     infoTarget: "Target-Logik: fährt den Ausgang auf einen festen Zielwert (targetValue 0–100) statt umzuschalten. Ohne Zielwert schaltet das Gerät zwischen Min/Max um. Z. B. für Szenen: immer auf 100% einschalten.",
-    footer: "Eigenständige Dev-Oberfläche. Gleiches JSON-Format wie die spätere HA-WebSocket-API.",
     pickerTitle: "Vorlage wählen",
-    pickerTarget: "Zielgerät",
     pickerTemplate: "Vorlage",
+    noTemplatesFit: "Keine Vorlage passt zu den Aktoren dieses Gateways.",
     fInput: "Eingang (Taster/Kontakt)",
     fInputChar: "Eingangsmerkmal",
     fOutput: "Aktor (Ausgang)",
@@ -115,7 +132,7 @@ const STRINGS = {
     fActive: "Regel aktiv",
     hintLogic: "Impuls = Taster, Schalter = Kippschalter, NO/NC = Tastkontakt, Target = Festwert.",
     hintOff: "Automatische Abschaltung nach Kurzdruck. 0 = deaktiviert.",
-    hintLong: "Eigener Timer, der per Langdruck gestartet wird.",
+    hintLong: "Eigener Timer, der per Langdruck gestartet wird (nur Impuls-/Target-Logik).",
     hintPre: "Lässt das Relais vor Ablauf 3× flackern. Sinnvoll erst ab Timer > 30s.",
     hintTarget: "Relais: 0 = aus, 1 = ein. Beschattung: Position 0–100.",
     inWired: "input (verdrahteter Kontakt)",
@@ -138,15 +155,11 @@ const STRINGS = {
     descPlaceholder: "z. B. Treppenlicht Flur",
     settingDefault: "Produkt-Standard; Live-Wert wird nicht gemeldet.",
     hintInputChar: "Nur Merkmale, die dieser Eingang tatsächlich meldet.",
+    singleOption: "Nur eine Option auf diesem Gateway — Auswahl deaktiviert.",
     eudNote: "Dimmregeln sind in dieser Version schreibgeschützt – Speichern würde die Rampen-Konfiguration löschen.",
     confirmDelete: "Diese Geräteregel löschen?",
     confirmReset: "Alle Geräteregeln auf Werkseinstellung zurücksetzen?",
     noDevices: "Keine Geräte verfügbar",
-    logicImpulseShort: "Impuls",
-    logicSwitchShort: "Schalter",
-    logicNOShort: "Schließer",
-    logicNCShort: "Öffner",
-    logicTargetShort: "Zielwert",
     kindWired: "Drahteingang",
     kindWindow: "FTK-Fenster",
     kindRocker: "EnOcean-Wippe",
@@ -155,8 +168,31 @@ const STRINGS = {
     pillLong: (s) => `Langdruck: ${s}s`,
     pillPre: "Vorwarnung",
     pillTarget: (v) => `Ziel ${v}`,
+    pillGateway: "Gateway",
+    tipGateway: "Im Gateway selbst verbaut (Aktor-Hardware).",
+    pillEnOcean: "EnOcean",
+    tipEnOcean: "Gekoppelter externer EnOcean-Sensor.",
+    rename: "Umbenennen",
+    tipRename: "Dieses Gerät umbenennen (wird im Gateway gespeichert).",
     count: (n) => `${n} Regel${n === 1 ? "" : "n"}`,
     tmpl: "Vorlage",
+    modeLive: "Live",
+    modeDemo: "Demo",
+    modeToggleTitle: "Gateway zum Verbinden wählen",
+    gwTitle: "Gateways",
+    gwManual: "Manuelle Eingabe",
+    gwScan: "Erneut suchen",
+    gwConnect: "Verbinden",
+    gwDemo: "Demo-Gateway",
+    gwDemoDesc: "Eingebaute Beispieldaten, keine Hardware nötig.",
+    gwConfigured: "konfiguriert",
+    gwHostPh: "Hostname oder IP",
+    gwPopPh: "Geräte-PIN (leer = konfiguriert)",
+    gwNeedHost: "Bitte zuerst Hostname oder IP eingeben.",
+    gwScanning: "Suche läuft…",
+    gwNone: "Noch keine Gateways gefunden — Suche läuft…",
+    gwNoneIdle: "Keine Gateways gefunden.",
+    connecting: (n) => `Verbinde mit ${n}…`,
     tipInput: "Welcher physische Eingang die Regel auslöst: Drahtkontakt, FTK-Fensterkontakt oder EnOcean-Wippenhälfte.",
     tipOutput: "Welcher Aktor-Ausgang angesteuert wird (ESR-Relaiskanal).",
     tipLogic: "Impuls = Aktion bei Tastendruck. Schalter = Aktion bei Druck UND Loslassen. NO = Ausgang normalerweise offen: Druck schließt, Loslassen öffnet. NC = umgekehrt. Target = Festwert, ohne Wert Wechsel Min/Max.",
@@ -261,6 +297,7 @@ function syncInputChars(keep) {
   const cur = keep || sel.value;
   sel.innerHTML = inputChars($("fInput").value).map((c) => `<option value="${c}">${c}</option>`).join("");
   setSelect(sel, cur);
+  lockIfSingle(sel, "lockInputChar");
 }
 
 function syncOutput(keepChar, keepLogic) {
@@ -268,7 +305,24 @@ function syncOutput(keepChar, keepLogic) {
   const curChar = keepChar || co.value;
   co.innerHTML = outputChars($("fOutput").value).map((tgt) => `<option value="${tgt.identifier}">${tgt.identifier} (${tgt.deviceClass})</option>`).join("");
   setSelect(co, curChar);
+  lockIfSingle(co, "lockOutputChar");
   syncLogics(keepLogic);
+}
+
+/* Single-choice selects carry no editable information: disable them and
+ * say so, so a one-input/one-output gateway reads as fixed, not broken. */
+function lockIfSingle(select, noteId) {
+  const single = select.options.length <= 1;
+  select.disabled = single;
+  const note = document.getElementById(noteId);
+  if (note) note.textContent = single ? t("singleOption") : "";
+}
+
+function updateSingleOptionLocks() {
+  lockIfSingle($("fInput"), "lockInput");
+  lockIfSingle($("fInputChar"), "lockInputChar");
+  lockIfSingle($("fOutput"), "lockOutput");
+  lockIfSingle($("fOutputChar"), "lockOutputChar");
 }
 
 function syncLogics(keep) {
@@ -287,8 +341,11 @@ function updateAddonVisibility() {
   const logic = $("fLogic").value;
   const isTarget = logic === "target" || logic === "buttonTargetValue";
   const noShortPress = logic === "buttonSwitch";
+  // Long-press discrimination exists only in impulse/target logics (live
+  // device rejects longPressOffTimer for switch/NO/NC combinations).
+  const hasLongPress = logic === "buttonImpulseSwitch" || isTarget;
   $("rOff").hidden = !addons.has("offTimer") || noShortPress;
-  $("rLong").hidden = !addons.has("longPressOffTimer");
+  $("rLong").hidden = !addons.has("longPressOffTimer") || !hasLongPress;
   $("rPre").hidden = !addons.has("prewarning") || noShortPress;
   $("rTarget").hidden = !addons.has("targetValue") || !isTarget;
   const eud = selectedTargetClass() === "EUD";
@@ -335,9 +392,34 @@ function renderDevices() {
   for (const dev of state.devices) {
     const card = document.createElement("div");
     card.className = "card";
+    const head = document.createElement("div");
+    head.className = "row";
+    head.style.alignItems = "center";
     const name = document.createElement("div");
     name.style.fontWeight = "600";
     name.textContent = dev.displayName || dev.deviceGuid.slice(0, 8);
+    head.append(name);
+    if (dev.gateway) {
+      const g = document.createElement("span");
+      g.className = "pill logic";
+      g.textContent = t("pillGateway");
+      g.title = t("tipGateway");
+      head.append(g);
+    }
+    if (dev.pairedEnOcean) {
+      const p = document.createElement("span");
+      p.className = "pill";
+      p.textContent = t("pillEnOcean");
+      p.title = t("tipEnOcean");
+      head.append(p);
+    }
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    const rn = document.createElement("button");
+    rn.textContent = t("rename");
+    rn.title = t("tipRename");
+    rn.addEventListener("click", () => renameDevice(dev, name));
+    head.append(spacer, rn);
     const flow = document.createElement("div");
     flow.className = "flow";
     const chars = [...(dev.functions || []), ...(dev.infos || [])];
@@ -372,9 +454,59 @@ function renderDevices() {
       if (tips.length) pill.title = tips.join(" ");
       flow.appendChild(pill);
     }
-    card.append(name, flow);
+    card.append(head, flow);
     box.appendChild(card);
   }
+}
+
+async function renameDevice(dev, nameEl) {
+  if (nameEl.querySelector("input")) return; // already editing
+  const current = dev.displayName || "";
+  nameEl.textContent = "";
+  nameEl.style.display = "flex";
+  nameEl.style.gap = "8px";
+  nameEl.style.flex = "1";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = current;
+  input.maxLength = 128;
+  input.style.flex = "1";
+  input.style.minWidth = "0";
+  const ok = document.createElement("button");
+  ok.className = "primary";
+  ok.textContent = t("save");
+  const cancel = document.createElement("button");
+  cancel.textContent = t("cancel");
+  const done = async (save) => {
+    const next = input.value.trim();
+    if (save && next && next !== current) {
+      try {
+        await api(`/api/devices/${dev.deviceGuid}`, {
+          method: "PUT",
+          body: JSON.stringify({ displayName: next }),
+        });
+        // Instant local update: a full refresh() costs ~60s on live
+        // hardware and the rename only changes displayName.
+        const local = state.devices.find((d) => d.deviceGuid === dev.deviceGuid);
+        if (local) local.displayName = next;
+        for (const t of [...(state.caps?.triggers || []), ...(state.caps?.targets || [])]) {
+          if (t.deviceGuid === dev.deviceGuid) t.displayName = next;
+        }
+      } catch (err) {
+        $("count").title = String(err.message || err);
+      }
+    }
+    render();
+  };
+  ok.addEventListener("click", () => done(true));
+  cancel.addEventListener("click", () => render());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") done(true);
+    else if (e.key === "Escape") render();
+  });
+  nameEl.append(input, ok, cancel);
+  input.focus();
+  input.select();
 }
 
 function isTemplateRule(rule) {
@@ -400,8 +532,12 @@ function applyI18n() {
   $("fLong").title = t("tipLong");
   $("fPre").title = t("tipPre");
   $("fTarget").title = t("tipTarget");
+  $("gwOpen").title = t("modeToggleTitle");
+  $("gwHost").placeholder = t("gwHostPh");
+  $("gwPop").placeholder = t("gwPopPh");
   $("lang").value = lang;
   localStorage.setItem("studio-lang", lang);
+  updateSingleOptionLocks();
 }
 
 async function refresh() {
@@ -423,14 +559,145 @@ async function refresh() {
       (ds.devices || []).map((d) => [d.deviceGuid, d.settings || []])
     );
   } catch { state.devSettings = {}; }
-  const modeEl = $("mode");
-  modeEl.textContent = status.mode || "mock";
-  modeEl.classList.toggle("live", status.mode === "live");
+  const live = status.mode === "live";
+  $("gwOpen").textContent = live ? status.host || t("modeLive") : t("modeDemo");
+  $("gwOpen").classList.toggle("live", live);
+  $("gwOpen").classList.toggle("demo", !live);
   $("count").textContent = t("count")(rules.length);
   $("wait").hidden = true;
-  for (const id of ["new", "reset"]) $(id).disabled = false;
+  for (const id of ["new", "reset", "gwOpen"]) $(id).disabled = false;
   render();
 }
+
+/* Gateway picker: discovered gateways (mDNS) + demo entry, each with a
+ * Connect button. Connecting shows the initial waiting screen while the
+ * server logs into the gateway, then refreshes. */
+const gwDialog = $("gateways"), gwList = $("gwList");
+
+function setBusy(on, name) {
+  $("wait").hidden = !on;
+  if (on) $("wait").textContent = name ? t("connecting")(name) : t("waiting");
+  for (const id of ["new", "reset", "gwOpen"]) $(id).disabled = on;
+}
+
+function gwRow(name, meta, onConnect) {
+  const div = document.createElement("div");
+  div.className = "card";
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = name;
+  const sub = document.createElement("div");
+  sub.className = "meta";
+  sub.textContent = meta;
+  const row = document.createElement("div");
+  row.className = "row";
+  const spacer = document.createElement("span");
+  spacer.className = "spacer";
+  const btn = document.createElement("button");
+  btn.className = "primary";
+  btn.textContent = t("gwConnect");
+  btn.addEventListener("click", onConnect);
+  row.append(spacer, btn);
+  div.append(title, sub, row);
+  return div;
+}
+
+function renderGwList(gateways) {
+  gwList.innerHTML = "";
+  $("gwErr").textContent = "";
+  gwList.append(gwRow(t("gwDemo"), t("gwDemoDesc"), () => connectGateway({ mode: "mock" })));
+  if (!gateways.length) {
+    const none = document.createElement("div");
+    none.className = "meta";
+    none.textContent = Date.now() < gwDeadline ? t("gwNone") : t("gwNoneIdle");
+    gwList.append(none);
+  }
+  for (const gw of gateways) {
+    const ips = gw.ips || [];
+    const ipPart = ips.length
+      ? ` · ip ${ips[0]}${ips.length > 1 ? ` (+${ips.length - 1})` : ""}`
+      : "";
+    const meta = `host ${gw.host}:${gw.port || 443}${ipPart}`
+      + (gw.source === "configured" ? ` · ${t("gwConfigured")}` : "");
+    gwList.append(gwRow(gw.name || gw.host, meta, () => connectGateway({
+      mode: "live",
+      host: gw.host,
+      port: gw.port || 443,
+      name: gw.name || gw.host,
+    })));
+  }
+}
+
+/* Bounded discovery while the picker is open: polls /api/gateways for
+ * 30s per Rescan, accumulating devices (never dropping found ones). The
+ * scanning badge stays visible throughout, even with results listed. */
+let gwScanGen = 0;
+let gwDeadline = 0;
+const gwSeen = new Map();
+
+function gwKey(gw) {
+  return `${String(gw.host || "").toLowerCase()}:${gw.port || 443}`;
+}
+
+async function gwScanLoop() {
+  const gen = ++gwScanGen;
+  gwDeadline = Date.now() + 30000;
+  while (gwDialog.open && gen === gwScanGen && Date.now() < gwDeadline) {
+    $("gwScanState").hidden = false;
+    try {
+      const data = await api("/api/gateways");
+      if (gen !== gwScanGen || !gwDialog.open) break;
+      for (const gw of data.gateways || []) gwSeen.set(gwKey(gw), gw);
+      renderGwList([...gwSeen.values()]);
+    } catch (err) {
+      if (gen !== gwScanGen || !gwDialog.open) break;
+      $("gwErr").textContent = String(err.message || err);
+    }
+  }
+  if (gen === gwScanGen) {
+    $("gwScanState").hidden = true;
+    if (gwDialog.open) renderGwList([...gwSeen.values()]);
+  }
+}
+
+function openGateways() {
+  $("wait").hidden = true;
+  renderGwList([...gwSeen.values()]);
+  gwDialog.showModal();
+  gwScanLoop();
+}
+
+async function connectGateway(gw) {
+  const name = gw.name || (gw.mode === "mock" ? t("gwDemo") : gw.host);
+  const pop = $("gwPop").value.trim();
+  gwDialog.close();
+  setBusy(true, name);
+  try {
+    const body = gw.mode === "mock"
+      ? { mode: "mock" }
+      : { mode: "live", host: gw.host, port: gw.port || 443, ...(pop ? { pop } : {}) };
+    await api("/api/mode", { method: "POST", body: JSON.stringify(body) });
+  } catch (err) {
+    $("count").title = String(err.message || err);
+  }
+  await refresh();
+}
+
+$("gwOpen").addEventListener("click", openGateways);
+$("gwScan").addEventListener("click", () => gwScanLoop());
+$("gwGo").addEventListener("click", () => {
+  const host = $("gwHost").value.trim();
+  if (!host) {
+    $("gwErr").textContent = t("gwNeedHost");
+    return;
+  }
+  connectGateway({
+    mode: "live",
+    host,
+    port: Number($("gwPort").value || 443),
+    name: host,
+  });
+});
 
 function render() {
   renderDevices();
@@ -510,6 +777,8 @@ function fillDeviceSelects() {
   const fI = $("fInput"), fO = $("fOutput");
   fI.innerHTML = triggerDevices().map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
   fO.innerHTML = targetDevices().map((d) => `<option value="${d.deviceGuid}">${d.displayName}</option>`).join("");
+  lockIfSingle(fI, "lockInput");
+  lockIfSingle(fO, "lockOutput");
   syncInputChars();
   syncOutput();
 }
@@ -533,11 +802,16 @@ function formToPayload() {
   const off = Math.max(0, Number($("fOff").value || 0));
   const long = Math.max(0, Number($("fLong").value || 0));
   const logic = $("fLogic").value;
+  const isTarget = logic === "target" || logic === "buttonTargetValue";
+  const hasLongPress = logic === "buttonImpulseSwitch" || isTarget;
   const addOns = [];
-  if (off > 0 && logic !== "buttonSwitch") addOns.push({ type: "offTimer", time: off * 1000, data: null });
-  if (long > 0) addOns.push({ type: "longPressOffTimer", time: long * 1000, data: null });
-  if ($("fPre").checked && off > 0 && logic !== "buttonSwitch") addOns.push({ type: "prewarning", time: null, data: null });
-  if (logic === "target" || logic === "buttonTargetValue") addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 0) });
+  const hasOff = off > 0 && logic !== "buttonSwitch";
+  const hasLong = long > 0 && hasLongPress;
+  if (hasOff) addOns.push({ type: "offTimer", time: off * 1000, data: null });
+  if (hasLong) addOns.push({ type: "longPressOffTimer", time: long * 1000, data: null });
+  // Prewarning warns before either timer expires (device-tested with both).
+  if ($("fPre").checked && (hasOff || hasLong)) addOns.push({ type: "prewarning", time: null, data: null });
+  if (isTarget) addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 0) });
   const base = state.editing?.configuration || {};
   const descField = $("fDesc").value.trim();
   const description = descField || state.editing?.description || "studio";
@@ -718,115 +992,33 @@ const TEMPLATES = [
   },
 ];
 
-const picker = $("picker"), tmplList = $("tmplList"), tgtList = $("tgtList");
-let pickedTarget = null;
-
-/* --- Mini wiring diagrams (inline SVG, zero deps) -------------------------
- * Schematic-style preview per template: input symbol ──► logic box ──►
- * relay + lamp, with timer annotations. Generated from template values. */
+const picker = $("picker"), tmplList = $("tmplList");
 
 const escXml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;",
 }[c]));
 
-function inputSymbol(char) {
-  // DIN-style momentary symbols, drawn around center x=34, contacts ~y=44.
-  const c = char || "";
-  if (/contact|window/i.test(c)) {
-    // reed tube with inner contacts + magnet bar
-    return `<rect x="24" y="24" width="12" height="18" fill="none" stroke="currentColor" stroke-width="2"/>`
-      + `<line x1="30" y1="24" x2="30" y2="30" stroke="currentColor" stroke-width="2"/>`
-      + `<line x1="30" y1="36" x2="30" y2="42" stroke="currentColor" stroke-width="2"/>`
-      + `<rect x="42" y="20" width="5" height="26" fill="currentColor"/>`
-      + `<line x1="30" y1="42" x2="30" y2="48" stroke="currentColor" stroke-width="2"/>`;
-  }
-  if (/button/i.test(c)) {
-    // rocker: housing, tilted paddle, pivot dot
-    return `<rect x="20" y="22" width="28" height="22" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>`
-      + `<line x1="23" y1="41" x2="45" y2="25" stroke="currentColor" stroke-width="2"/>`
-      + `<circle cx="34" cy="33" r="1.8" fill="currentColor"/>`;
-  }
-  // pushbutton (NO): base line, terminal ticks, angled bridge with contact dot
-  return `<line x1="20" y1="44" x2="48" y2="44" stroke="currentColor" stroke-width="2"/>`
-    + `<line x1="23" y1="44" x2="23" y2="50" stroke="currentColor" stroke-width="2"/>`
-    + `<line x1="45" y1="44" x2="45" y2="50" stroke="currentColor" stroke-width="2"/>`
-    + `<line x1="23" y1="32" x2="43" y2="41" stroke="currentColor" stroke-width="2"/>`
-    + `<circle cx="44" cy="42" r="2" fill="currentColor"/>`;
-}
-
-function logicShort(value) {
-  const map = {
-    buttonImpulseSwitch: t("logicImpulseShort"),
-    buttonSwitch: t("logicSwitchShort"),
-    buttonNormallyOpened: t("logicNOShort"),
-    buttonNormallyClosed: t("logicNCShort"),
-    target: t("logicTargetShort"),
-    buttonTargetValue: t("logicTargetShort"),
-  };
-  return map[value] || value || "?";
-}
-
-function miniDiagram(v, outIdent, outClass) {
-  if (!v.logic) return "";
-  const parts = [];
-  if (v.off > 0) parts.push(`t=${v.off}s`);
-  if (v.long > 0) parts.push(`tL=${v.long}s`);
-  if (v.pre && v.off > 0) parts.push("+pre");
-  if (v.logic === "target" && v.target !== undefined) parts.push(`→${v.target}`);
-  const sub = escXml(parts.join("  "));
-  const inChar = escXml(v.inputChar || "");
-  const title = escXml(`${v.inputChar || "?"} → ${v.logic} → ${outIdent || outClass || "?"}`);
-  return `<svg width="240" height="80" viewBox="0 0 240 80" role="img" aria-label="${title}">`
-    + `<title>${title}</title>`
-    + `<g style="color:var(--secondary-text-color)">`
-    + inputSymbol(v.inputChar)
-    + `<line x1="52" y1="34" x2="62" y2="34" stroke="currentColor" stroke-width="2"/>`
-    + `<polygon points="62,30 70,34 62,38" fill="currentColor"/>`
-    + `</g>`
-    + `<rect x="70" y="12" width="92" height="42" rx="8" fill="rgba(3,169,244,0.07)" stroke="var(--primary-color)" stroke-width="1.5"/>`
-    + `<text x="116" y="32" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">${escXml(logicShort(v.logic))}</text>`
-    + `<text x="116" y="46" text-anchor="middle" font-size="9" fill="var(--secondary-text-color)">${sub}</text>`
-    + `<g style="color:var(--secondary-text-color)"><line x1="162" y1="34" x2="172" y2="34" stroke="currentColor" stroke-width="2"/>`
-    + `<polygon points="172,30 180,34 172,38" fill="currentColor"/></g>`
-    + `<g><rect x="180" y="21" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"/>`
-    + `<text x="193" y="39" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">K</text></g>`
-    + `<line x1="206" y1="34" x2="210" y2="34" stroke="currentColor" stroke-width="2"/>`
-    + `<g stroke="currentColor" stroke-width="2"><circle cx="221" cy="34" r="10" fill="none"/>`
-    + `<line x1="215" y1="28" x2="227" y2="40" stroke-width="1.6"/><line x1="227" y1="28" x2="215" y2="40" stroke-width="1.6"/>`
-    + `<line x1="221" y1="19" x2="221" y2="22" stroke-width="1.6"/><line x1="221" y1="46" x2="221" y2="49" stroke-width="1.6"/>`
-    + `<line x1="233" y1="34" x2="236" y2="34" stroke-width="1.6"/></g>`
-    + `<text x="34" y="72" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${inChar}</text>`
-    + `<text x="200" y="72" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${escXml(outIdent || "")}</text>`
-    + `</svg>`;
-}
-
-function templateApplies(tmpl, cls) {
-  return !tmpl.classes || tmpl.classes.includes(cls);
-}
-
-function renderTargets() {
-  tgtList.innerHTML = "";
-  const targets = state.caps?.targets || [];
-  for (const tgt of targets) {
-    const btn = document.createElement("button");
-    btn.textContent = `${tgt.displayName} · ${tgt.identifier} (${tgt.deviceClass})`;
-    btn.title = tgt.deviceGuid;
-    if (pickedTarget && pickedTarget.deviceGuid === tgt.deviceGuid && pickedTarget.identifier === tgt.identifier) {
-      btn.classList.add("selected");
-    }
-    btn.addEventListener("click", () => {
-      pickedTarget = tgt;
-      renderTargets();
-      renderTemplates();
-    });
-    tgtList.appendChild(btn);
-  }
+/* Templates are contextual: only templates whose actuator class exists on
+ * the connected gateway are offered, prefilled with the matching target.
+ * Without capability data everything is offered. */
+function templateFits(tmpl) {
+  if (!tmpl.classes) return true;
+  const classes = new Set((state.caps?.targets || []).map((t) => t.deviceClass));
+  if (!classes.size) return true;
+  return tmpl.classes.some((c) => classes.has(c));
 }
 
 function renderTemplates() {
   tmplList.innerHTML = "";
-  const cls = pickedTarget?.deviceClass || "ESR";
-  for (const tmpl of TEMPLATES.filter((x) => templateApplies(x, cls))) {
+  const fitting = TEMPLATES.filter(templateFits);
+  if (!fitting.length) {
+    const div = document.createElement("div");
+    div.className = "meta";
+    div.textContent = t("noTemplatesFit");
+    tmplList.appendChild(div);
+    return;
+  }
+  for (const tmpl of fitting) {
     const txt = tmpl[lang] || tmpl.en;
     const btn = document.createElement("button");
     const name = document.createElement("strong");
@@ -834,41 +1026,19 @@ function renderTemplates() {
     const desc = document.createElement("small");
     desc.textContent = txt.desc;
     btn.append(name, desc);
-    try {
-      const preview = miniDiagram(
-        { ...tmpl.values(), suggest: tmpl.suggest },
-        pickedTarget?.identifier, pickedTarget?.deviceClass
-      );
-      if (preview) {
-        const holder = document.createElement("div");
-        holder.className = "meta";
-        holder.innerHTML = preview;
-        btn.append(holder);
-      }
-    } catch { /* preview is best-effort; picker works without it */ }
     btn.addEventListener("click", () => {
       picker.close();
       state.editing = null;
       openEditor(null);
-      const v = tmpl.values();
-      if (pickedTarget) {
-        v.outputGuid = pickedTarget.deviceGuid;
-        v.outputChar = pickedTarget.identifier;
-      }
-      prefillForm({ ...v, suggest: tmpl.suggest });
+      prefillForm({ ...tmpl.values(), suggest: tmpl.suggest });
     });
     tmplList.appendChild(btn);
   }
 }
 
 function openPicker() {
-  const targets = state.caps?.targets || [];
-  if (!triggerDevices().length || !targets.length) { alert(t("noDevices")); return; }
+  if (!triggerDevices().length || !targetDevices().length) { alert(t("noDevices")); return; }
   fillDeviceSelects();
-  if (!pickedTarget || !targets.some((x) => x.deviceGuid === pickedTarget.deviceGuid && x.identifier === pickedTarget.identifier)) {
-    pickedTarget = targets[0];
-  }
-  renderTargets();
   renderTemplates();
   picker.showModal();
 }
@@ -962,14 +1132,4 @@ $("reset").addEventListener("click", async () => {
 });
 
 applyI18n();
-refresh().catch((err) => {
-  $("wait").hidden = true;
-  listEl.innerHTML = "";
-  const div = document.createElement("div");
-  div.className = "card";
-  const em = document.createElement("div");
-  em.className = "err";
-  em.textContent = `Failed to reach studio API: ${err.message}. Is python3 studio/server.py running?`;
-  div.appendChild(em);
-  listEl.appendChild(div);
-});
+openGateways();

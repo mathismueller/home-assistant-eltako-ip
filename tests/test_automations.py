@@ -57,6 +57,40 @@ def test_off_timer_with_button_switch_rejected():
     assert any("offTimer" in p and "buttonSwitch" in p for p in problems)
 
 
+def test_long_press_timer_with_button_switch_rejected():
+    rule = make_rule(
+        logic="buttonSwitch",
+        add_ons=[AutomationAddOn(type="longPressOffTimer", time=60000)],
+    )
+    problems = validate_rule(rule)
+    assert any("longPressOffTimer" in p for p in problems)
+
+
+def test_long_press_timer_with_level_logics_rejected():
+    for logic in ("buttonNormallyOpened", "buttonNormallyClosed"):
+        rule = make_rule(
+            logic=logic,
+            add_ons=[AutomationAddOn(type="longPressOffTimer", time=60000)],
+        )
+        problems = validate_rule(rule)
+        assert any("longPressOffTimer" in p for p in problems), logic
+
+
+def test_long_press_timer_with_impulse_and_target_accepted():
+    impulse = make_rule(
+        add_ons=[AutomationAddOn(type="longPressOffTimer", time=60000)],
+    )
+    assert validate_rule(impulse) == []
+    target = make_rule(
+        logic="buttonTargetValue",
+        add_ons=[
+            AutomationAddOn(type="targetValue", data=1),
+            AutomationAddOn(type="longPressOffTimer", time=60000),
+        ],
+    )
+    assert validate_rule(target) == []
+
+
 def test_prewarning_without_timer_rejected():
     rule = make_rule(add_ons=[AutomationAddOn(type="prewarning")])
     problems = validate_rule(rule)
