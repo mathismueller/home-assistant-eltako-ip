@@ -33,7 +33,7 @@
   header {
     display: flex; gap: 12px; align-items: center; padding: 16px 20px;
     border-bottom: 1px solid var(--divider-color); position: sticky; top: 0;
-    background: var(--card-background-color); z-index: 5;
+    background: var(--card-background-color); z-index: 5; flex-wrap: wrap;
   }
   header h1 { font-size: 17px; margin: 0; }
   .badge {
@@ -51,11 +51,19 @@
   }
   button.primary { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
   button.danger { color: var(--error-color); border-color: var(--error-color); }
+  header select {
+    background: transparent; border: 1px solid var(--divider-color);
+    border-radius: 8px; padding: 7px 10px;
+  }
   main { max-width: 980px; margin: 0 auto; padding: 20px; display: grid; gap: 12px; }
+  #list { display: grid; gap: 12px; }
   .card {
     border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius);
     padding: 14px 16px; display: grid; gap: 10px;
   }
+  details.info { font-size: 13px; }
+  details.info summary { cursor: pointer; font-weight: 600; }
+  details.info p { color: var(--secondary-text-color); margin: 8px 0; }
   .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .pill {
     font-size: 12px; border: 1px solid var(--divider-color); border-radius: 20px;
@@ -78,7 +86,9 @@
     background: transparent; border: 1px solid var(--divider-color);
     border-radius: 8px; padding: 8px 10px;
   }
+  .hint { font-size: 12px; color: var(--secondary-text-color); }
   .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .check small { flex-basis: 100%; }
   .err { color: var(--error-color); font-size: 13px; min-height: 1em; }
 </style>
 </head>
@@ -88,51 +98,67 @@
   <span id="mode" class="badge">mock</span>
   <span id="count" class="badge">0 rules</span>
   <span class="spacer"></span>
-  <button id="preset">Staircase + prewarning</button>
-  <button id="new">New rule</button>
-  <button id="reset" class="danger">Reset</button>
+  <select id="lang" aria-label="Language / Sprache">
+    <option value="en">EN</option>
+    <option value="de">DE</option>
+  </select>
+  <button id="preset" data-i18n="preset" title="">Staircase + prewarning</button>
+  <button id="new" data-i18n="new">New rule</button>
+  <button id="reset" class="danger" data-i18n="reset">Reset</button>
 </header>
-<main id="list"></main>
+<main>
+  <details class="info card">
+    <summary data-i18n="infoTitle">What do these settings mean?</summary>
+    <p data-i18n="infoStaircase"></p>
+    <p data-i18n="infoTarget"></p>
+  </details>
+  <div id="list"></div>
+</main>
 <p class="meta" style="max-width:980px;margin:0 auto;padding:0 20px 30px">
-  Standalone dev harness. Same JSON contract as the future HA WebSocket API.
+  <span data-i18n="footer"></span>
   Run <code>python3 studio/server.py</code> (mock) or with <code>--live</code> (gateway proxy).
 </p>
 
 <dialog id="editor">
   <h3 id="editorTitle" style="margin:0 0 8px">Rule</h3>
   <form method="dialog" id="form">
-    <label>Input device <select id="fInput" required></select></label>
-    <label>Input characteristic
+    <label><span data-i18n="fInput">Input device</span><select id="fInput" required></select></label>
+    <label><span data-i18n="fInputChar">Input characteristic</span>
       <select id="fInputChar">
-        <option value="input">input (wired dry contact)</option>
-        <option value="contact">contact (FTK window)</option>
-        <option value="buttonA0">buttonA0 (EnOcean rocker)</option>
-        <option value="buttonA1">buttonA1 (EnOcean rocker)</option>
+        <option value="input" data-i18n="inWired">input (wired dry contact)</option>
+        <option value="contact" data-i18n="inContact">contact (FTK window)</option>
+        <option value="buttonA0" data-i18n="inA0">buttonA0 (EnOcean rocker)</option>
+        <option value="buttonA1" data-i18n="inA1">buttonA1 (EnOcean rocker)</option>
       </select>
     </label>
-    <label>Output actuator <select id="fOutput" required></select></label>
-    <label>Output characteristic
+    <label><span data-i18n="fOutput">Output actuator</span><select id="fOutput" required></select></label>
+    <label><span data-i18n="fOutputChar">Output characteristic</span>
       <select id="fOutputChar"><option value="relay">relay</option></select>
     </label>
-    <label>Logic
+    <label><span data-i18n="fLogic">Logic</span>
       <select id="fLogic">
-        <option value="buttonImpulseSwitch">Impulse switch (Taster)</option>
-        <option value="buttonSwitch">Switch (Kippschalter)</option>
-        <option value="buttonNormallyOpened">Momentary NO</option>
-        <option value="buttonNormallyClosed">Momentary NC</option>
-        <option value="target">Target value</option>
+        <option value="buttonImpulseSwitch" data-i18n="logicImpulse">Impulse switch (Taster)</option>
+        <option value="buttonSwitch" data-i18n="logicSwitch">Switch (Kippschalter)</option>
+        <option value="buttonNormallyOpened" data-i18n="logicNO">Momentary NO</option>
+        <option value="buttonNormallyClosed" data-i18n="logicNC">Momentary NC</option>
+        <option value="target" data-i18n="logicTarget">Target value</option>
       </select>
+      <small class="hint" data-i18n="hintLogic"></small>
     </label>
-    <label>Off-timer (s, 0 = off) <input id="fOff" type="number" min="0" step="1" value="10" /></label>
-    <label>Long-press off-timer (s, 0 = off) <input id="fLong" type="number" min="0" step="1" value="0" /></label>
-    <label class="check"><input id="fPre" type="checkbox" checked /> Prewarning flicker (30s before off)</label>
-    <label>Target value 0–100 (for target logic) <input id="fTarget" type="number" min="0" max="100" value="100" /></label>
-    <label class="check"><input id="fActive" type="checkbox" checked /> Rule active</label>
+    <label><span data-i18n="fOff">Off-timer (s, 0 = off)</span><input id="fOff" type="number" min="0" step="1" value="10" />
+      <small class="hint" data-i18n="hintOff"></small></label>
+    <label><span data-i18n="fLong">Long-press off-timer (s, 0 = off)</span><input id="fLong" type="number" min="0" step="1" value="0" />
+      <small class="hint" data-i18n="hintLong"></small></label>
+    <label class="check"><input id="fPre" type="checkbox" checked /> <span data-i18n="fPre">Prewarning flicker (30s before off)</span>
+      <small class="hint" data-i18n="hintPre"></small></label>
+    <label><span data-i18n="fTarget">Target value 0–100 (for target logic)</span><input id="fTarget" type="number" min="0" max="100" value="100" />
+      <small class="hint" data-i18n="hintTarget"></small></label>
+    <label class="check"><input id="fActive" type="checkbox" checked /> <span data-i18n="fActive">Rule active</span></label>
     <div class="err" id="fErr"></div>
     <div class="row">
       <span class="spacer"></span>
-      <button value="cancel">Cancel</button>
-      <button id="save" class="primary" value="default">Save</button>
+      <button value="cancel" data-i18n="cancel">Cancel</button>
+      <button id="save" class="primary" value="default" data-i18n="save">Save</button>
     </div>
   </form>
 </dialog>
