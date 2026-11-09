@@ -286,6 +286,11 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args):  # noqa: A002 - stdlib signature
         sys.stderr.write("[studio] " + format % args + "\n")
 
+    def end_headers(self):
+        # Dev harness: never cache HTML/JS so UI edits apply on reload.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def _send_json(self, obj, status: int = 200):
         body = json.dumps(obj).encode()
         self.send_response(status)
