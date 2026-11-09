@@ -28,13 +28,13 @@ const STRINGS = {
     fOff: "Off-timer (s, 0 = off)",
     fLong: "Long-press off-timer (s, 0 = off)",
     fPre: "Prewarning flicker (30s before off)",
-    fTarget: "Target value 0–100 (for target logic)",
+    fTarget: "Target value (for target logic)",
     fActive: "Rule active",
     hintLogic: "Impulse = pushbutton (Taster), Switch = rocker (Kippschalter), NO/NC = momentary contact, Target = fixed value.",
     hintOff: "Auto-off delay after a short press. 0 disables it.",
     hintLong: "Separate auto-off timer armed by a long press.",
     hintPre: "Flickers the relay 3× before the off-timer expires. Needs an off-timer > 30s to be useful.",
-    hintTarget: "Only used with Target logic: the output moves to this value.",
+    hintTarget: "Relay: 0 = off, 1 = on. Blind/shutter: position 0–100.",
     inWired: "input (wired dry contact)",
     inContact: "contact (FTK window)",
     inA0: "buttonA0 (EnOcean rocker)",
@@ -102,13 +102,13 @@ const STRINGS = {
     fOff: "Ausschaltverzögerung (s, 0 = aus)",
     fLong: "Ausschaltverzögerung bei Langdruck (s, 0 = aus)",
     fPre: "Vorwarn-Flackern (30s vor Aus)",
-    fTarget: "Zielwert 0–100 (für Target-Logik)",
+    fTarget: "Zielwert (für Target-Logik)",
     fActive: "Regel aktiv",
     hintLogic: "Impuls = Taster, Schalter = Kippschalter, NO/NC = Tastkontakt, Target = Festwert.",
     hintOff: "Automatische Abschaltung nach Kurzdruck. 0 = deaktiviert.",
     hintLong: "Eigener Timer, der per Langdruck gestartet wird.",
     hintPre: "Lässt das Relais vor Ablauf 3× flackern. Sinnvoll erst ab Timer > 30s.",
-    hintTarget: "Nur für Target-Logik: Der Ausgang fährt auf diesen Wert.",
+    hintTarget: "Relais: 0 = aus, 1 = ein. Beschattung: Position 0–100.",
     inWired: "input (verdrahteter Kontakt)",
     inContact: "contact (FTK-Fenster)",
     inA0: "buttonA0 (EnOcean-Wippe)",
@@ -160,6 +160,7 @@ const LOGIC_LABEL_I18N = {
   buttonNormallyOpened: { en: "Momentary NO", de: "Schließer (NO)" },
   buttonNormallyClosed: { en: "Momentary NC", de: "Öffner (NC)" },
   target: { en: "Target value", de: "Zielwert" },
+  buttonTargetValue: { en: "Target value", de: "Zielwert" },
   universalButtonDimmer: { en: "Universal dimmer", de: "Universal-Dimmer" },
   directionalUpButtonDimmer: { en: "Up / dim up", de: "Hoch / hochdimmen" },
   directionalDownButtonDimmer: { en: "Down / dim down", de: "Runter / runterdimmen" },
@@ -572,6 +573,28 @@ const TEMPLATES = [
     values: () => {
       const w = wiredTrigger();
       return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 60, pre: false };
+    },
+  },
+  {
+    id: "alwayson",
+    en: { name: "Template: Always on", desc: "Press always switches the relay on (manufacturer pattern, targetValue 1)." },
+    de: { name: "Vorlage: Immer ein", desc: "Druck schaltet das Relais immer ein (Herstellermuster, targetValue 1)." },
+    description: "always-on",
+    suggest: { en: "Always on", de: "Immer ein" },
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "target", off: 0, long: 0, pre: false, target: 1 };
+    },
+  },
+  {
+    id: "alwaysoff",
+    en: { name: "Template: Always off", desc: "Press always switches the relay off (manufacturer pattern, targetValue 0)." },
+    de: { name: "Vorlage: Immer aus", desc: "Druck schaltet das Relais immer aus (Herstellermuster, targetValue 0)." },
+    description: "always-off",
+    suggest: { en: "Always off", de: "Immer aus" },
+    values: () => {
+      const w = wiredTrigger();
+      return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "target", off: 0, long: 0, pre: false, target: 0 };
     },
   },
   {

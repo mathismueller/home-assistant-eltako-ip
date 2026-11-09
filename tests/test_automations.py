@@ -211,6 +211,29 @@ def test_build_capabilities_accepts_all_product_shapes():
     )
 
 
+def test_button_target_value_alias_accepted():
+    # Manufacturer Workflows use "buttonTargetValue" where the spec says
+    # "target"; both name the same ESR behavior.
+    rule = make_rule(
+        logic="buttonTargetValue",
+        add_ons=[AutomationAddOn(type="targetValue", data=1)],
+    )
+    assert validate_rule(rule) == []
+
+
+def test_esr_target_value_range_enforced():
+    bad = make_rule(
+        logic="target",
+        add_ons=[AutomationAddOn(type="targetValue", data=100)],
+    )
+    assert any("targetValue" in p for p in validate_rule(bad))
+    good = make_rule(
+        logic="target",
+        add_ons=[AutomationAddOn(type="targetValue", data=0)],
+    )
+    assert validate_rule(good) == []
+
+
 @pytest.mark.asyncio
 async def test_create_rejects_invalid_rule_before_http(
     test_host: str, test_pop: str

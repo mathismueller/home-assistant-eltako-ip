@@ -79,6 +79,10 @@ NON_TRIGGER_PREFIXES = ("minimum", "maximum")
 
 # Logics per actuator class, per spec ("Logic" section for ESR/ESB,
 # "EUD Automation Logic" table for EUD).
+# NOTE: Eltako's own Postman Workflows (SERIES 62-IP API collection,
+# "ESR62-IP (Relay) / Input as always on|off") use "buttonTargetValue"
+# where the OpenAPI spec (series64ipm/1.3.0) says "target". Both name the
+# same behavior, so both validate. Prefer "target" when writing.
 LOGICS_BY_CLASS: dict[str, frozenset[str]] = {
     "ESR": frozenset(
         {
@@ -87,6 +91,7 @@ LOGICS_BY_CLASS: dict[str, frozenset[str]] = {
             "buttonNormallyOpened",
             "buttonNormallyClosed",
             "target",
+            "buttonTargetValue",
         }
     ),
     "ESB": frozenset(
@@ -96,6 +101,7 @@ LOGICS_BY_CLASS: dict[str, frozenset[str]] = {
             "buttonNormallyOpened",
             "buttonNormallyClosed",
             "target",
+            "buttonTargetValue",
         }
     ),
     "EUD": frozenset(
@@ -339,6 +345,16 @@ def validate_rule(
         errors.append(
             "prewarning requires an offTimer or longPressOffTimer addOn."
         )
+
+    # Manufacturer Workflows ("Input as always on|off") drive ESR relays
+    # with targetValue 0/1; other values are meaningless on a relay.
+    if cls == "ESR" and rule.logic in ("target", "buttonTargetValue"):
+        target_addon = rule.get_addon("targetValue")
+        if target_addon is not None and target_addon.data not in (0, 1):
+            errors.append(
+                "targetValue for ESR relays must be 0 (off) or 1 (on), "
+                f"got {target_addon.data!r}."
+            )
 
     if cls == "EUD":
         required = EUD_REQUIRED_CONFIG.get(rule.logic, frozenset())
