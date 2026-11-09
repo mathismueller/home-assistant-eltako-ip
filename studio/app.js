@@ -484,6 +484,12 @@ function openPicker() {
 }
 
 $("new").addEventListener("click", () => openPicker());
+
+document.querySelectorAll("dialog").forEach((dlg) => {
+  dlg.querySelectorAll('button[value="cancel"]').forEach((btn) =>
+    btn.addEventListener("click", () => dlg.close())
+  );
+});
 $("lang").addEventListener("change", async (e) => {
   lang = e.target.value;
   applyI18n();
