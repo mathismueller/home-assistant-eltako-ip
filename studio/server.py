@@ -37,6 +37,7 @@ import ssl
 import sys
 import urllib.request
 import urllib.error
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -166,8 +167,6 @@ class StudioState:
     def create_automation(self, payload: dict):
         if self.live:
             return self.live._call("POST", "/services/eltako/automations", payload)
-        import uuid
-
         item = copy.deepcopy(payload)
         cfg = item.setdefault("configuration", {})
         cfg.setdefault("automationGuid", str(uuid.uuid4()))
@@ -203,8 +202,62 @@ class StudioState:
     def reset_automations(self):
         if self.live:
             return self.live._call("DELETE", "/services/eltako/automations")
+        # Mirror hardware: reset recreates the factory default automation
+        # (spec: "the default factory settings automation is recreated with
+        # a new automationGuid"), i.e. wired input -> relay impulse switch.
         self.automations = []
+        default = self._factory_default()
+        if default is not None:
+            self.automations.append(default)
         return True
+
+    def _factory_default(self) -> dict | None:
+        input_guid = input_char = None
+        for dev in self.devices:
+            ids = [
+                c.get("identifier")
+                for c in dev.get("functions", [])
+                if isinstance(c, dict)
+            ]
+            for candidate in ("input", "inputChannel1"):
+                if candidate in ids:
+                    input_guid = dev["deviceGuid"]
+                    input_char = candidate
+                    break
+            if input_guid:
+                break
+        output_guid = output_char = None
+        for dev in self.devices:
+            ids = [
+                c.get("identifier")
+                for c in dev.get("functions", [])
+                if isinstance(c, dict)
+            ]
+            for candidate in ("relay", "relayChannel1"):
+                if candidate in ids:
+                    output_guid = dev["deviceGuid"]
+                    output_char = candidate
+                    break
+            if output_guid:
+                break
+        if not input_guid or not output_guid:
+            return None
+        return {
+            "enabled": True,
+            "description": "Default impulse switch automation",
+            "configuration": {
+                "automationGuid": str(uuid.uuid4()),
+                "logic": "buttonImpulseSwitch",
+                "inputDeviceGuid": input_guid,
+                "inputCharacteristicIdentifier": input_char,
+                "outputDeviceGuid": output_guid,
+                "outputCharacteristicIdentifier": output_char,
+                "addOns": [],
+                "logicConfiguration": {},
+            },
+            "operatingStatus": "success",
+            "errors": [],
+        }
 
 
 class Handler(SimpleHTTPRequestHandler):
