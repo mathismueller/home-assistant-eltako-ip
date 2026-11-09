@@ -282,10 +282,13 @@ function syncLogics(keep) {
 
 function updateAddonVisibility() {
   const addons = new Set(caps().addonsByClass[selectedTargetClass()] || []);
-  $("rOff").hidden = !addons.has("offTimer");
+  const logic = $("fLogic").value;
+  const isTarget = logic === "target" || logic === "buttonTargetValue";
+  const noShortPress = logic === "buttonSwitch";
+  $("rOff").hidden = !addons.has("offTimer") || noShortPress;
   $("rLong").hidden = !addons.has("longPressOffTimer");
-  $("rPre").hidden = !addons.has("prewarning");
-  $("rTarget").hidden = !addons.has("targetValue");
+  $("rPre").hidden = !addons.has("prewarning") || noShortPress;
+  $("rTarget").hidden = !addons.has("targetValue") || !isTarget;
   const eud = selectedTargetClass() === "EUD";
   $("eudNote").hidden = !eud;
   if (eud) $("eudNote").textContent = t("eudNote");
@@ -525,11 +528,12 @@ function ruleToForm(rule) {
 function formToPayload() {
   const off = Math.max(0, Number($("fOff").value || 0));
   const long = Math.max(0, Number($("fLong").value || 0));
+  const logic = $("fLogic").value;
   const addOns = [];
-  if (off > 0 && $("fLogic").value !== "buttonSwitch") addOns.push({ type: "offTimer", time: off * 1000, data: null });
+  if (off > 0 && logic !== "buttonSwitch") addOns.push({ type: "offTimer", time: off * 1000, data: null });
   if (long > 0) addOns.push({ type: "longPressOffTimer", time: long * 1000, data: null });
-  if ($("fPre").checked && off > 0) addOns.push({ type: "prewarning", time: null, data: null });
-  if ($("fLogic").value === "target") addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 100) });
+  if ($("fPre").checked && off > 0 && logic !== "buttonSwitch") addOns.push({ type: "prewarning", time: null, data: null });
+  if (logic === "target" || logic === "buttonTargetValue") addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 0) });
   const base = state.editing?.configuration || {};
   const descField = $("fDesc").value.trim();
   const description = descField || state.editing?.description || "studio";
@@ -869,6 +873,7 @@ $("new").addEventListener("click", () => openPicker());
 $("fInput").addEventListener("change", () => syncInputChars());
 $("fOutput").addEventListener("change", () => syncOutput());
 $("fOutputChar").addEventListener("change", () => syncLogics());
+$("fLogic").addEventListener("change", () => updateAddonVisibility());
 
 document.querySelectorAll("dialog").forEach((dlg) => {
   dlg.querySelectorAll('button[value="cancel"]').forEach((btn) =>
