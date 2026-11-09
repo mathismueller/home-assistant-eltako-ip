@@ -6,7 +6,7 @@
 
 const STRINGS = {
   en: {
-    preset: "Staircase + prewarning",
+    preset: "Template: Staircase + prewarning",
     presetTitle: "Short press turns the relay on, auto-off after the timer. Prewarning flickers the light 3× starting 30s before switch-off.",
     new: "New rule",
     reset: "Reset",
@@ -62,9 +62,17 @@ const STRINGS = {
     pillPre: "Prewarning flicker",
     pillTarget: (v) => `Target ${v}`,
     count: (n) => `${n} rule${n === 1 ? "" : "s"}`,
+    tmpl: "Template",
+    tipInput: "Which physical input triggers the rule: wired dry contact, FTK window contact, or EnOcean rocker half.",
+    tipOutput: "Which actuator output this rule drives (ESR relay channel).",
+    tipLogic: "Impulse = pushbutton toggles on press. Switch = rocker follows press/release. NO/NC = output active only while pressed. Target = move to a fixed value.",
+    tipOff: "Auto-off delay after a short press (staircase timer). 0 disables it. Not supported with Switch logic.",
+    tipLong: "Separate auto-off timer armed by a long press instead of a short one.",
+    tipPre: "Flickers the relay 3× starting 30s before the off-timer expires. Needs an off-timer > 30s to be useful.",
+    tipTarget: "Only used with Target logic: the output moves to this value (0–100). Without it the device toggles min/max.",
   },
   de: {
-    preset: "Treppenlicht + Vorwarnung",
+    preset: "Vorlage: Treppenlicht + Vorwarnung",
     presetTitle: "Kurzer Druck schaltet ein, automatisches Ausschalten nach Zeit. Vorwarnung lässt das Licht 30s vorher 3× flackern.",
     new: "Neue Regel",
     reset: "Zurücksetzen",
@@ -120,6 +128,14 @@ const STRINGS = {
     pillPre: "Vorwarnung",
     pillTarget: (v) => `Ziel ${v}`,
     count: (n) => `${n} Regel${n === 1 ? "" : "n"}`,
+    tmpl: "Vorlage",
+    tipInput: "Welcher physische Eingang die Regel auslöst: Drahtkontakt, FTK-Fensterkontakt oder EnOcean-Wippenhälfte.",
+    tipOutput: "Welcher Aktor-Ausgang angesteuert wird (ESR-Relaiskanal).",
+    tipLogic: "Impuls = Taster schaltet um. Schalter = Wippe folgt Druck/Loslassen. NO/NC = Ausgang nur während Druck aktiv. Target = fester Zielwert.",
+    tipOff: "Ausschaltverzögerung nach Kurzdruck (Treppenlicht). 0 = aus. Nicht mit Schalter-Logik kombinierbar.",
+    tipLong: "Eigener Ausschalt-Timer, der per Langdruck statt Kurzdruck gestartet wird.",
+    tipPre: "Lässt das Relais 30s vor Ablauf 3× flackern. Sinnvoll erst ab Timer > 30s.",
+    tipTarget: "Nur für Target-Logik: Der Ausgang fährt auf diesen Wert (0–100). Ohne Wert schaltet das Gerät Min/Max um.",
   },
 };
 
@@ -170,13 +186,17 @@ function inputKind(rule) {
 function addonPills(rule) {
   const pills = [];
   for (const a of rule.configuration.addOns || []) {
-    if (a.type === "offTimer") pills.push(t("pillOff")(Math.round(a.time / 1000)));
-    else if (a.type === "longPressOffTimer") pills.push(t("pillLong")(Math.round(a.time / 1000)));
-    else if (a.type === "prewarning") pills.push(t("pillPre"));
-    else if (a.type === "targetValue") pills.push(t("pillTarget")(a.data));
-    else pills.push(a.type);
+    if (a.type === "offTimer") pills.push({ text: t("pillOff")(Math.round(a.time / 1000)), title: t("tipOff") });
+    else if (a.type === "longPressOffTimer") pills.push({ text: t("pillLong")(Math.round(a.time / 1000)), title: t("tipLong") });
+    else if (a.type === "prewarning") pills.push({ text: t("pillPre"), title: t("tipPre") });
+    else if (a.type === "targetValue") pills.push({ text: t("pillTarget")(a.data), title: t("tipTarget") });
+    else pills.push({ text: a.type, title: "" });
   }
   return pills;
+}
+
+function isTemplateRule(rule) {
+  return /staircase|treppen|prewarning|vorwarnung/i.test(rule.description || "");
 }
 
 function applyI18n() {
@@ -186,6 +206,14 @@ function applyI18n() {
     if (typeof v === "string") el.textContent = v;
   });
   $("preset").title = t("presetTitle");
+  $("fInput").title = t("tipInput");
+  $("fInputChar").title = t("tipInput");
+  $("fOutput").title = t("tipOutput");
+  $("fLogic").title = t("tipLogic");
+  $("fOff").title = t("tipOff");
+  $("fLong").title = t("tipLong");
+  $("fPre").title = t("tipPre");
+  $("fTarget").title = t("tipTarget");
   $("lang").value = lang;
   localStorage.setItem("studio-lang", lang);
 }
@@ -228,15 +256,17 @@ function render() {
       ? `<span class="pill warn">${rule.operatingStatus}</span>` : "";
     const flow = document.createElement("div");
     flow.className = "flow";
-    flow.textContent = `${inputKind(rule)} · ${deviceName(cfg.inputDeviceGuid)} ──► ${labels[cfg.logic] || cfg.logic} ${addonPills(rule).join(" · ")} ──► ${deviceName(cfg.outputDeviceGuid)} · ${cfg.outputCharacteristicIdentifier} ${health ? "· " + rule.operatingStatus : ""}`;
-    // Rebuild with pills for styling (textContent above is fallback for a11y)
+    const tmplPill = isTemplateRule(rule)
+      ? `<span class="pill logic" title="${t("presetTitle")}">${t("tmpl")}</span>` : "";
+    const pillsHtml = addonPills(rule).map((p) => `<span class="pill" title="${p.title}">${p.text}</span>`).join("");
     flow.innerHTML = `
-      <span class="pill">${inputKind(rule)} · ${deviceName(cfg.inputDeviceGuid)}</span>
+      ${tmplPill}
+      <span class="pill" title="${t("tipInput")}">${inputKind(rule)} · ${deviceName(cfg.inputDeviceGuid)}</span>
       <span class="arrow">──►</span>
-      <span class="pill logic">${labels[cfg.logic] || cfg.logic}</span>
-      ${addonPills(rule).map((p) => `<span class="pill">${p}</span>`).join("")}
+      <span class="pill logic" title="${t("tipLogic")}">${labels[cfg.logic] || cfg.logic}</span>
+      ${pillsHtml}
       <span class="arrow">──►</span>
-      <span class="pill">${deviceName(cfg.outputDeviceGuid)} · ${cfg.outputCharacteristicIdentifier}</span>
+      <span class="pill" title="${t("tipOutput")}">${deviceName(cfg.outputDeviceGuid)} · ${cfg.outputCharacteristicIdentifier}</span>
       ${health}`;
     const row = document.createElement("div");
     row.className = "row";
