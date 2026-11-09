@@ -56,6 +56,7 @@
   button.primary:hover { filter: brightness(1.07); }
   button.danger:hover { background: rgba(219,68,55,.08); }
   button:active { transform: scale(.98); }
+  button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
   button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
   #tmplList button:hover, #tgtList button:hover { box-shadow: 0 1px 6px rgba(0,0,0,.18); }
   #tgtList button.selected:hover { border-color: var(--primary-color); }
@@ -114,6 +115,7 @@
   <h1>Eltako Automation Studio</h1>
   <span id="mode" class="badge">mock</span>
   <span id="count" class="badge">0 rules</span>
+  <span id="ro" class="badge" data-i18n="readOnly" hidden>read-only</span>
   <span class="spacer"></span>
   <select id="lang" aria-label="Language / Sprache">
     <option value="en">EN</option>

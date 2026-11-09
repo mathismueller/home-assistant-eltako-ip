@@ -24,6 +24,7 @@ gateway directly (avoids CORS + cert issues).
 Usage:
   python3 studio/server.py                  # mock on :8099
   python3 studio/server.py --live           # live gateway from .env
+  python3 studio/server.py --live --read-only  # explore live box, block writes
   python3 studio/server.py --port 8099 --live --host 192.168.1.100
 """
 
@@ -264,6 +265,7 @@ class Handler(SimpleHTTPRequestHandler):
     state: StudioState
     mode: str = "mock"
     gateway_host: str = ""
+    read_only: bool = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STUDIO_DIR), **kwargs)
@@ -290,7 +292,12 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/status":
             count = len(self.state.list_automations())
             return self._send_json(
-                {"mode": self.mode, "host": self.gateway_host, "rule_count": count}
+                {
+                    "mode": self.mode,
+                    "host": self.gateway_host,
+                    "rule_count": count,
+                    "read_only": self.read_only,
+                }
             )
         if parsed.path == "/api/automations":
             return self._send_json(self.state.list_automations())
@@ -326,6 +333,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/index.html"
         return super().do_GET()
 
+    def _blocked_read_only(self, parsed) -> bool:
+        if self.read_only and parsed.path.startswith("/api/automations"):
+            self._send_json({"error": "read-only mode: mutations disabled"}, 403)
+            return True
+        return False
+
     def do_POST(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/validate":
@@ -339,6 +352,8 @@ class Handler(SimpleHTTPRequestHandler):
             except (ValueError, KeyError, TypeError) as err:
                 return self._send_json({"ok": False, "problems": [f"Malformed rule: {err}"]}, 400)
         if parsed.path == "/api/automations":
+            if self._blocked_read_only(parsed):
+                return
             try:
                 item = self.state.create_automation(self._read_json())
                 return self._send_json(item, 201)
@@ -348,6 +363,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_PUT(self):
         parsed = urlparse(self.path)
+        if self._blocked_read_only(parsed):
+            return
         if parsed.path.startswith("/api/automations/"):
             guid = parsed.path.rsplit("/", 1)[-1]
             try:
@@ -361,6 +378,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         parsed = urlparse(self.path)
+        if self._blocked_read_only(parsed):
+            return
         if parsed.path == "/api/automations":
             try:
                 self.state.reset_automations()
@@ -384,6 +403,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Eltako automation studio dev server")
     parser.add_argument("--port", type=int, default=8099)
     parser.add_argument("--live", action="store_true", help="proxy live gateway")
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="reject mutating calls (POST/PUT/DELETE on /api/automations)",
+    )
     parser.add_argument("--host", default=os.environ.get("ELTAKO_HOST", ""))
     parser.add_argument("--gateway-port", type=int, default=int(os.environ.get("ELTAKO_PORT", "443")))
     parser.add_argument("--pop", default=os.environ.get("ELTAKO_POP", ""))
@@ -401,9 +425,11 @@ def main() -> None:
     Handler.state = StudioState(live)
     Handler.mode = mode
     Handler.gateway_host = args.host if live else "mock fixtures"
+    Handler.read_only = args.read_only
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"[studio] {mode} mode → http://127.0.0.1:{args.port}/")
+    ro = " read-only" if args.read_only else ""
+    print(f"[studio] {mode}{ro} mode → http://127.0.0.1:{args.port}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
