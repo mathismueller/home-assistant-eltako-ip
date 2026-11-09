@@ -12,6 +12,8 @@ the future Home Assistant WebSocket API shape:
   GET    /api/devices              -> list[device raw dict]
   GET    /api/enocean_devices      -> list[enocean device raw dict]
   GET    /api/products             -> list[product raw dict]
+  POST   /api/validate             -> {ok, problems[]} for a draft rule payload
+      (spec-based pre-write check, same code the client library uses)
 
 Mock mode (default): reads tests/fixtures/local/*.json, CRUD happens in memory.
 Live mode (--live): proxies to https://HOST:PORT/api/v0/... using POP login
@@ -42,6 +44,30 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "local"
 STUDIO_DIR = Path(__file__).resolve().parent
+
+sys.path.insert(0, str(REPO_ROOT / "src"))
+try:
+    # Load stdlib-only modules by path: importing the package would pull in
+    # aiohttp (client.py), which the dev server must not require.
+    import importlib.util
+
+    def _load_module(name: str):
+        spec = importlib.util.spec_from_file_location(
+            f"studio_{name}", REPO_ROOT / "src" / "aioeltako_ip" / f"{name}.py"
+        )
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[f"studio_{name}"] = module
+        spec.loader.exec_module(module)
+        return module
+
+    _models = _load_module("models")
+    _automations = _load_module("automations")
+    validate_rule = _automations.validate_rule
+    AutomationRule = _models.AutomationRule
+except (ImportError, AssertionError, AttributeError):  # pragma: no cover
+    validate_rule = None  # type: ignore[assignment]
+    AutomationRule = None  # type: ignore[assignment]
 
 
 def load_dotenv() -> None:
@@ -233,6 +259,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/validate":
+            if validate_rule is None:
+                return self._send_json({"ok": True, "problems": []})
+            try:
+                rule = AutomationRule.from_dict(self._read_json())
+                problems = validate_rule(rule)
+                return self._send_json({"ok": not problems, "problems": problems})
+            except (ValueError, KeyError, TypeError) as err:
+                return self._send_json({"ok": False, "problems": [f"Malformed rule: {err}"]}, 400)
         if parsed.path == "/api/automations":
             try:
                 item = self.state.create_automation(self._read_json())

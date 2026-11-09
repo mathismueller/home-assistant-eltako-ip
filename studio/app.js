@@ -46,6 +46,7 @@ const STRINGS = {
     logicTarget: "Target value",
     titleNew: "New rule",
     titleEdit: "Edit rule",
+    fixBeforeSave: "Please fix before saving:",
     confirmDelete: "Delete this on-device rule?",
     confirmReset: "Reset all on-device automations to factory defaults?",
     noDevices: "No devices available",
@@ -113,6 +114,7 @@ const STRINGS = {
     logicTarget: "Zielwert",
     titleNew: "Neue Regel",
     titleEdit: "Regel bearbeiten",
+    fixBeforeSave: "Bitte vor dem Speichern beheben:",
     confirmDelete: "Diese Geräteregel löschen?",
     confirmReset: "Alle Geräteregeln auf Werkseinstellung zurücksetzen?",
     noDevices: "Keine Geräte verfügbar",
@@ -501,6 +503,11 @@ $("save").addEventListener("click", async (e) => {
   e.preventDefault();
   try {
     const payload = formToPayload();
+    const check = await api("/api/validate", { method: "POST", body: JSON.stringify(payload) }).catch(() => ({ ok: true, problems: [] }));
+    if (!check.ok) {
+      showProblems(check.problems || []);
+      return;
+    }
     if (state.editing) {
       await api(`/api/automations/${state.editing.configuration.automationGuid}`, {
         method: "PUT", body: JSON.stringify(payload),
@@ -514,6 +521,42 @@ $("save").addEventListener("click", async (e) => {
     $("fErr").textContent = String(err.message || err);
   }
 });
+
+function showProblems(problems) {
+  const box = $("fErr");
+  box.innerHTML = "";
+  const head = document.createElement("div");
+  head.textContent = t("fixBeforeSave");
+  const ul = document.createElement("ul");
+  ul.style.margin = "4px 0 4px 18px";
+  ul.style.padding = "0";
+  for (const p of problems) {
+    const li = document.createElement("li");
+    li.textContent = p;
+    ul.append(li);
+  }
+  box.append(head, ul);
+}
+
+/* Live pre-check while editing: surfaces spec problems as soon as the
+ * conflicting field changes, without blocking. */
+let _validateTimer = 0;
+async function revalidateQuietly() {
+  if (!editor.open) return;
+  try {
+    const check = await api("/api/validate", {
+      method: "POST", body: JSON.stringify(formToPayload()),
+    });
+    if (check.ok) $("fErr").innerHTML = "";
+    else showProblems(check.problems || []);
+  } catch { /* dev server unreachable: save will report */ }
+}
+for (const id of ["fLogic", "fOff", "fLong", "fPre", "fTarget"]) {
+  $(id).addEventListener("change", () => {
+    clearTimeout(_validateTimer);
+    _validateTimer = setTimeout(revalidateQuietly, 250);
+  });
+}
 
 $("reset").addEventListener("click", async () => {
   if (!confirm(t("confirmReset"))) return;
