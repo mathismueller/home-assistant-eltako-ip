@@ -23,8 +23,6 @@ const STRINGS = {
     pickerTitle: "Choose a template",
     pickerTarget: "Target device",
     pickerTemplate: "Template",
-    readOnly: "read-only",
-    readOnlyTitle: "Mutations disabled — restart with --read-write to change rules",
     fInput: "Input device",
     fInputChar: "Input characteristic",
     fOutput: "Output actuator",
@@ -103,8 +101,6 @@ const STRINGS = {
     pickerTitle: "Vorlage wählen",
     pickerTarget: "Zielgerät",
     pickerTemplate: "Vorlage",
-    readOnly: "nur Lesen",
-    readOnlyTitle: "Änderungen deaktiviert – Neustart mit --read-write zum Ändern",
     fInput: "Eingang (Taster/Kontakt)",
     fInputChar: "Eingangsmerkmal",
     fOutput: "Aktor (Ausgang)",
@@ -390,7 +386,6 @@ async function refresh() {
   state.rules = rules;
   state.devices = Array.isArray(devices) ? devices : devices.devices || [];
   state.enocean = enocean;
-  state.readOnly = !!status.read_only;
   try {
     state.caps = await api("/api/capabilities");
   } catch { state.caps = null; }
@@ -398,12 +393,6 @@ async function refresh() {
   modeEl.textContent = status.mode || "mock";
   modeEl.classList.toggle("live", status.mode === "live");
   $("count").textContent = t("count")(rules.length);
-  $("ro").hidden = !state.readOnly;
-  $("ro").title = t("readOnlyTitle");
-  for (const id of ["new", "reset"]) {
-    $(id).disabled = state.readOnly;
-    $(id).title = state.readOnly ? t("readOnlyTitle") : "";
-  }
   render();
 }
 
@@ -470,13 +459,6 @@ function render() {
     const delBtn = document.createElement("button");
     delBtn.textContent = t("delete");
     delBtn.className = "danger";
-    if (state.readOnly) {
-      for (const el of [toggle, editBtn, delBtn]) {
-        el.disabled = true;
-        el.title = t("readOnlyTitle");
-      }
-      checkLabel.title = t("readOnlyTitle");
-    }
     delBtn.addEventListener("click", async () => {
       if (!confirm(t("confirmDelete"))) return;
       await api(`/api/automations/${cfg.automationGuid}`, { method: "DELETE" });
@@ -546,8 +528,6 @@ function openEditor(rule) {
   $("editorTitle").textContent = rule ? t("titleEdit") : t("titleNew");
   $("fErr").textContent = "";
   $("fDesc").placeholder = t("descPlaceholder");
-  $("save").disabled = !!state.readOnly;
-  $("save").title = state.readOnly ? t("readOnlyTitle") : "";
   if (rule) ruleToForm(rule);
   else $("fDesc").value = "";
   editor.showModal();
