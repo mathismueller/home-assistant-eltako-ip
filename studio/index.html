@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Eltako Automation Studio (dev)</title>
+<style>
+  /* HA-like tokens, light + dark. No external fonts/assets. */
+  :root {
+    --card-background-color: #fff;
+    --primary-color: #03a9f4;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --divider-color: #e0e0e0;
+    --error-color: #db4437;
+    --success-color: #43a047;
+    --ha-card-border-radius: 12px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --card-background-color: #1c1c1c;
+      --primary-text-color: #e1e1e1;
+      --secondary-text-color: #9e9e9e;
+      --divider-color: #2c2c2c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--card-background-color); color: var(--primary-text-color);
+  }
+  header {
+    display: flex; gap: 12px; align-items: center; padding: 16px 20px;
+    border-bottom: 1px solid var(--divider-color); position: sticky; top: 0;
+    background: var(--card-background-color); z-index: 5;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  .badge {
+    font-size: 12px; padding: 2px 10px; border-radius: 20px;
+    border: 1px solid var(--divider-color); color: var(--secondary-text-color);
+  }
+  .badge.live { color: var(--success-color); border-color: var(--success-color); }
+  .spacer { flex: 1; }
+  button, select, input {
+    font: inherit; color: inherit;
+  }
+  button {
+    border: 1px solid var(--divider-color); background: transparent;
+    border-radius: 8px; padding: 8px 14px; cursor: pointer;
+  }
+  button.primary { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+  button.danger { color: var(--error-color); border-color: var(--error-color); }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; display: grid; gap: 12px; }
+  .card {
+    border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius);
+    padding: 14px 16px; display: grid; gap: 10px;
+  }
+  .flow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pill {
+    font-size: 12px; border: 1px solid var(--divider-color); border-radius: 20px;
+    padding: 3px 10px; color: var(--secondary-text-color);
+  }
+  .pill.logic { color: var(--primary-color); border-color: var(--primary-color); }
+  .pill.warn { color: #b7791f; border-color: #b7791f; }
+  .arrow { color: var(--secondary-text-color); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .meta { font-size: 12px; color: var(--secondary-text-color); }
+  dialog {
+    border: 1px solid var(--divider-color); border-radius: 12px;
+    background: var(--card-background-color); color: inherit;
+    width: min(560px,  calc(100vw - 40px));
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog form { display: grid; gap: 10px; padding: 6px 0; }
+  label { display: grid; gap: 4px; font-size: 13px; }
+  select, input[type=text], input[type=number] {
+    background: transparent; border: 1px solid var(--divider-color);
+    border-radius: 8px; padding: 8px 10px;
+  }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .err { color: var(--error-color); font-size: 13px; min-height: 1em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Eltako Automation Studio</h1>
+  <span id="mode" class="badge">mock</span>
+  <span id="count" class="badge">0 rules</span>
+  <span class="spacer"></span>
+  <button id="preset">Staircase + prewarning</button>
+  <button id="new">New rule</button>
+  <button id="reset" class="danger">Reset</button>
+</header>
+<main id="list"></main>
+<p class="meta" style="max-width:980px;margin:0 auto;padding:0 20px 30px">
+  Standalone dev harness. Same JSON contract as the future HA WebSocket API.
+  Run <code>python3 studio/server.py</code> (mock) or with <code>--live</code> (gateway proxy).
+</p>
+
+<dialog id="editor">
+  <h3 id="editorTitle" style="margin:0 0 8px">Rule</h3>
+  <form method="dialog" id="form">
+    <label>Input device <select id="fInput" required></select></label>
+    <label>Input characteristic
+      <select id="fInputChar">
+        <option value="input">input (wired dry contact)</option>
+        <option value="contact">contact (FTK window)</option>
+        <option value="buttonA0">buttonA0 (EnOcean rocker)</option>
+        <option value="buttonA1">buttonA1 (EnOcean rocker)</option>
+      </select>
+    </label>
+    <label>Output actuator <select id="fOutput" required></select></label>
+    <label>Output characteristic
+      <select id="fOutputChar"><option value="relay">relay</option></select>
+    </label>
+    <label>Logic
+      <select id="fLogic">
+        <option value="buttonImpulseSwitch">Impulse switch (Taster)</option>
+        <option value="buttonSwitch">Switch (Kippschalter)</option>
+        <option value="buttonNormallyOpened">Momentary NO</option>
+        <option value="buttonNormallyClosed">Momentary NC</option>
+        <option value="target">Target value</option>
+      </select>
+    </label>
+    <label>Off-timer (s, 0 = off) <input id="fOff" type="number" min="0" step="1" value="10" /></label>
+    <label>Long-press off-timer (s, 0 = off) <input id="fLong" type="number" min="0" step="1" value="0" /></label>
+    <label class="check"><input id="fPre" type="checkbox" checked /> Prewarning flicker (30s before off)</label>
+    <label>Target value 0–100 (for target logic) <input id="fTarget" type="number" min="0" max="100" value="100" /></label>
+    <label class="check"><input id="fActive" type="checkbox" checked /> Rule active</label>
+    <div class="err" id="fErr"></div>
+    <div class="row">
+      <span class="spacer"></span>
+      <button value="cancel">Cancel</button>
+      <button id="save" class="primary" value="default">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
