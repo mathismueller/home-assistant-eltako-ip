@@ -84,6 +84,9 @@
     border-radius: 8px; padding: 8px 10px;
   }
   .hint { font-size: 12px; color: var(--secondary-text-color); }
+  #tmplList button { text-align: left; display: grid; gap: 2px; padding: 10px 12px; }
+  #tmplList button strong { font-size: 14px; }
+  #tmplList button small { font-size: 12px; color: var(--secondary-text-color); }
   .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .check small { flex-basis: 100%; }
   .err { color: var(--error-color); font-size: 13px; min-height: 1em; }
@@ -99,7 +102,6 @@
     <option value="en">EN</option>
     <option value="de">DE</option>
   </select>
-  <button id="preset" data-i18n="preset" title="">Template: Staircase + prewarning</button>
   <button id="new" data-i18n="new">New rule</button>
   <button id="reset" class="danger" data-i18n="reset">Reset</button>
 </header>
@@ -110,6 +112,15 @@
   <span data-i18n="footer"></span>
   Run <code>python3 studio/server.py</code> (mock) or with <code>--live</code> (gateway proxy).
 </p>
+
+<dialog id="picker">
+  <h3 id="pickerTitle" style="margin:0 0 8px" data-i18n="pickerTitle">Choose a template</h3>
+  <div id="tmplList" style="display:grid;gap:8px"></div>
+  <div class="row" style="margin-top:12px">
+    <span class="spacer"></span>
+    <button value="cancel" data-i18n="cancel">Cancel</button>
+  </div>
+</dialog>
 
 <dialog id="editor">
   <h3 id="editorTitle" style="margin:0 0 8px">Rule</h3>

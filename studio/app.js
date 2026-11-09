@@ -15,12 +15,12 @@ const STRINGS = {
     edit: "Edit",
     delete: "Delete",
     active: "active",
-    empty: "No on-device rules. Create one, or apply the staircase preset.",
+    empty: "No on-device rules. Create one from a template.",
     infoTitle: "What do these settings mean?",
     infoStaircase: "Staircase + prewarning (Treppenlicht): a short press switches the relay on and it turns off automatically after the off-timer. With prewarning the relay flickers 3× starting 30s before expiry so you can press again. Runs entirely on-device — works even if Wi-Fi / Home Assistant is down.",
     infoTarget: "Target logic: moves the output to a fixed targetValue (0–100) instead of toggling. Without a target the device toggles between min/max. Use it for scenes, e.g. always switch on to 100%.",
     footer: "Standalone dev harness. Same JSON contract as the future HA WebSocket API.",
-    fInput: "Input device",
+    pickerTitle: "Choose a template",    fInput: "Input device",
     fInputChar: "Input characteristic",
     fOutput: "Output actuator",
     fOutputChar: "Output characteristic",
@@ -81,11 +81,12 @@ const STRINGS = {
     edit: "Bearbeiten",
     delete: "Löschen",
     active: "aktiv",
-    empty: "Keine Geräteregeln. Lege eine an oder nutze die Treppenlicht-Vorlage.",
+    empty: "Keine Geräteregeln. Lege eine aus einer Vorlage an.",
     infoTitle: "Was bedeuten diese Einstellungen?",
     infoStaircase: "Treppenlicht + Vorwarnung: Kurzer Druck schaltet das Relais ein, nach der Ausschaltverzögerung geht es automatisch aus. Mit Vorwarnung flackert das Relais 30s vor Ablauf 3×, damit man erneut drücken kann. Läuft komplett im Gerät – auch ohne WLAN / Home Assistant.",
     infoTarget: "Target-Logik: fährt den Ausgang auf einen festen Zielwert (targetValue 0–100) statt umzuschalten. Ohne Zielwert schaltet das Gerät zwischen Min/Max um. Z. B. für Szenen: immer auf 100% einschalten.",
     footer: "Eigenständige Dev-Oberfläche. Gleiches JSON-Format wie die spätere HA-WebSocket-API.",
+    pickerTitle: "Vorlage wählen",
     fInput: "Eingang (Taster/Kontakt)",
     fInputChar: "Eingangsmerkmal",
     fOutput: "Aktor (Ausgang)",
@@ -196,7 +197,9 @@ function addonPills(rule) {
 }
 
 function isTemplateRule(rule) {
-  return /staircase|treppen|prewarning|vorwarnung/i.test(rule.description || "");
+  const desc = rule.description || "";
+  if (typeof TEMPLATES !== "undefined" && TEMPLATES.some((tmpl) => tmpl.description && desc === tmpl.description)) return true;
+  return /staircase|treppen|prewarning|vorwarnung/i.test(desc);
 }
 
 function applyI18n() {
@@ -205,7 +208,6 @@ function applyI18n() {
     const v = t(el.dataset.i18n);
     if (typeof v === "string") el.textContent = v;
   });
-  $("preset").title = t("presetTitle");
   $("fInput").title = t("tipInput");
   $("fInputChar").title = t("tipInput");
   $("fOutput").title = t("tipOutput");
@@ -340,9 +342,11 @@ function formToPayload() {
   if ($("fPre").checked && off > 0) addOns.push({ type: "prewarning", time: null, data: null });
   if ($("fLogic").value === "target") addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 100) });
   const base = state.editing?.configuration || {};
+  const description = state.editing?.description || state.pendingDescription || "studio";
+  state.pendingDescription = null;
   return {
     enabled: $("fActive").checked,
-    description: state.editing?.description || "studio",
+    description,
     configuration: {
       automationGuid: base.automationGuid || "",
       logic: $("fLogic").value,
@@ -367,7 +371,119 @@ function openEditor(rule) {
   editor.showModal();
 }
 
-$("new").addEventListener("click", () => openEditor(null));
+function prefillForm(v) {
+  if (v.inputGuid) $("fInput").value = v.inputGuid;
+  if (v.inputChar) $("fInputChar").value = v.inputChar;
+  if (v.outputGuid) $("fOutput").value = v.outputGuid;
+  if (v.logic) $("fLogic").value = v.logic;
+  if (v.off !== undefined) $("fOff").value = v.off;
+  if (v.long !== undefined) $("fLong").value = v.long;
+  if (v.pre !== undefined) $("fPre").checked = v.pre;
+  if (v.target !== undefined) $("fTarget").value = v.target;
+  $("fActive").checked = v.active !== false;
+}
+
+function wiredInput() {
+  return state.devices.find((d) => /wired input/i.test(d.displayName || ""))
+    || state.devices[1] || state.devices[0];
+}
+
+function relayOutput() {
+  return state.devices.find((d) => /ESR/i.test(d.displayName || ""))
+    || state.devices[0];
+}
+
+function windowDevice() {
+  return state.devices.find((d) => (d.infos || []).some((f) => f.identifier === "contact"))
+    || state.devices.find((d) => /window|fenster|ftk/i.test(d.displayName || ""))
+    || null;
+}
+
+function enoceanInput() {
+  const eo = state.enocean[0];
+  return eo ? { deviceGuid: eo.deviceGuid } : wiredInput();
+}
+
+/* One-click templates. Each prefills the editor (nothing is saved until
+ * the user confirms with Save), except blank which opens defaults. */
+const TEMPLATES = [
+  {
+    id: "blank",
+    en: { name: "Blank rule", desc: "Start from scratch with default values." },
+    de: { name: "Leere Regel", desc: "Mit Standardwerten neu beginnen." },
+    values: () => ({}),
+  },
+  {
+    id: "staircase",
+    en: { name: "Template: Staircase + prewarning", desc: "Treppenlicht: on with short press, auto-off after 10s, 3× flicker warning." },
+    de: { name: "Vorlage: Treppenlicht + Vorwarnung", desc: "Bei Kurzdruck ein, nach 10s automatisch aus, 3× Flackern als Warnung." },
+    description: "staircase+prewarning",
+    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 10, long: 0, pre: true }),
+  },
+  {
+    id: "toggle",
+    en: { name: "Template: Pushbutton toggle", desc: "Taster: each press toggles the relay, no timer." },
+    de: { name: "Vorlage: Taster-Umschaltung", desc: "Jeder Tastendruck schaltet das Relais um, ohne Timer." },
+    description: "pushbutton-toggle",
+    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false }),
+  },
+  {
+    id: "rocker",
+    en: { name: "Template: Rocker switch", desc: "Kippschalter: output follows press and release." },
+    de: { name: "Vorlage: Kippschalter", desc: "Der Ausgang folgt Druck und Loslassen der Wippe." },
+    description: "rocker-switch",
+    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false }),
+  },
+  {
+    id: "longpress",
+    en: { name: "Template: Long-press timer", desc: "Short press toggles, long press starts a 60s auto-off timer." },
+    de: { name: "Vorlage: Langdruck-Timer", desc: "Kurzdruck schaltet um, Langdruck startet 60s-Timer." },
+    description: "longpress-timer",
+    values: () => ({ inputGuid: wiredInput()?.deviceGuid, inputChar: "input", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 60, pre: false }),
+  },
+  {
+    id: "window",
+    en: { name: "Template: Window contact", desc: "FTK contact drives the relay (follows open/close)." },
+    de: { name: "Vorlage: Fensterkontakt", desc: "FTK-Kontakt steuert das Relais (folgt Auf/Zu)." },
+    description: "window-contact",
+    values: () => ({ inputGuid: windowDevice()?.deviceGuid || wiredInput()?.deviceGuid, inputChar: "contact", outputGuid: relayOutput()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false }),
+  },
+  {
+    id: "enocean",
+    en: { name: "Template: EnOcean rocker", desc: "Paired wireless rocker (buttonA0) toggles the relay." },
+    de: { name: "Vorlage: EnOcean-Wippe", desc: "Gekoppelte Funkwippe (buttonA0) schaltet das Relais." },
+    description: "enocean-rocker",
+    values: () => ({ inputGuid: enoceanInput()?.deviceGuid, inputChar: "buttonA0", outputGuid: relayOutput()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false }),
+  },
+];
+
+const picker = $("picker"), tmplList = $("tmplList");
+
+function openPicker() {
+  if (!state.devices.length) { alert(t("noDevices")); return; }
+  fillDeviceSelects();
+  tmplList.innerHTML = "";
+  for (const tmpl of TEMPLATES) {
+    const txt = tmpl[lang] || tmpl.en;
+    const btn = document.createElement("button");
+    const name = document.createElement("strong");
+    name.textContent = txt.name;
+    const desc = document.createElement("small");
+    desc.textContent = txt.desc;
+    btn.append(name, desc);
+    btn.addEventListener("click", () => {
+      picker.close();
+      state.editing = null;
+      state.pendingDescription = tmpl.description || "studio";
+      openEditor(null);
+      prefillForm(tmpl.values());
+    });
+    tmplList.appendChild(btn);
+  }
+  picker.showModal();
+}
+
+$("new").addEventListener("click", () => openPicker());
 $("lang").addEventListener("change", async (e) => {
   lang = e.target.value;
   applyI18n();
@@ -396,38 +512,6 @@ $("save").addEventListener("click", async (e) => {
 $("reset").addEventListener("click", async () => {
   if (!confirm(t("confirmReset"))) return;
   await api("/api/automations", { method: "DELETE" });
-  await refresh();
-});
-
-$("preset").addEventListener("click", async () => {
-  // Staircase timer with prewarning: wired input -> first relay output.
-  const input = state.devices.find((d) => /wired input/i.test(d.displayName || ""))
-    || state.devices[1] || state.devices[0];
-  const output = state.devices.find((d) => /ESR/i.test(d.displayName || ""))
-    || state.devices[0];
-  if (!input || !output) { alert(t("noDevices")); return; }
-  await api("/api/automations", {
-    method: "POST",
-    body: JSON.stringify({
-      enabled: true,
-      description: "staircase+prewarning",
-      configuration: {
-        automationGuid: "",
-        logic: "buttonImpulseSwitch",
-        inputDeviceGuid: input.deviceGuid,
-        inputCharacteristicIdentifier: "input",
-        outputDeviceGuid: output.deviceGuid,
-        outputCharacteristicIdentifier: "relay",
-        addOns: [
-          { type: "offTimer", time: 10000, data: null },
-          { type: "prewarning", time: null, data: null },
-        ],
-        logicConfiguration: {},
-      },
-      operatingStatus: "success",
-      errors: [],
-    }),
-  });
   await refresh();
 });
 
