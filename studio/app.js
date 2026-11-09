@@ -646,23 +646,28 @@ const escXml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
 }[c]));
 
 function inputSymbol(char) {
+  // DIN-style momentary symbols, drawn around center x=34, contacts ~y=44.
   const c = char || "";
   if (/contact|window/i.test(c)) {
-    // reed contact + magnet
-    return `<rect x="8" y="22" width="9" height="16" fill="none" stroke="currentColor"/>`
-      + `<rect x="27" y="18" width="5" height="24" fill="currentColor"/>`
-      + `<line x1="12.5" y1="38" x2="12.5" y2="44" stroke="currentColor"/><line x1="29.5" y1="42" x2="29.5" y2="48" stroke="currentColor"/>`;
+    // reed tube with inner contacts + magnet bar
+    return `<rect x="24" y="24" width="12" height="18" fill="none" stroke="currentColor" stroke-width="2"/>`
+      + `<line x1="30" y1="24" x2="30" y2="30" stroke="currentColor" stroke-width="2"/>`
+      + `<line x1="30" y1="36" x2="30" y2="42" stroke="currentColor" stroke-width="2"/>`
+      + `<rect x="42" y="20" width="5" height="26" fill="currentColor"/>`
+      + `<line x1="30" y1="42" x2="30" y2="48" stroke="currentColor" stroke-width="2"/>`;
   }
   if (/button/i.test(c)) {
-    // rocker with diagonal divider
-    return `<rect x="6" y="18" width="26" height="24" fill="none" stroke="currentColor"/>`
-      + `<line x1="8" y1="40" x2="30" y2="20" stroke="currentColor"/>`;
+    // rocker: housing, tilted paddle, pivot dot
+    return `<rect x="20" y="22" width="28" height="22" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>`
+      + `<line x1="23" y1="41" x2="45" y2="25" stroke="currentColor" stroke-width="2"/>`
+      + `<circle cx="34" cy="33" r="1.8" fill="currentColor"/>`;
   }
-  // pushbutton (NO): terminals + angled bridge
-  return `<line x1="10" y1="24" x2="10" y2="42" stroke="currentColor"/>`
-    + `<line x1="28" y1="24" x2="28" y2="42" stroke="currentColor"/>`
-    + `<line x1="10" y1="24" x2="26" y2="34" stroke="currentColor"/>`
-    + `<circle cx="28" cy="36" r="1.6" fill="currentColor"/>`;
+  // pushbutton (NO): base line, terminal ticks, angled bridge with contact dot
+  return `<line x1="20" y1="44" x2="48" y2="44" stroke="currentColor" stroke-width="2"/>`
+    + `<line x1="23" y1="44" x2="23" y2="50" stroke="currentColor" stroke-width="2"/>`
+    + `<line x1="45" y1="44" x2="45" y2="50" stroke="currentColor" stroke-width="2"/>`
+    + `<line x1="23" y1="32" x2="43" y2="41" stroke="currentColor" stroke-width="2"/>`
+    + `<circle cx="44" cy="42" r="2" fill="currentColor"/>`;
 }
 
 function logicShort(value) {
@@ -687,25 +692,27 @@ function miniDiagram(v, outIdent, outClass) {
   const sub = escXml(parts.join("  "));
   const inChar = escXml(v.inputChar || "");
   const title = escXml(`${v.inputChar || "?"} → ${v.logic} → ${outIdent || outClass || "?"}`);
-  return `<svg width="220" height="78" viewBox="0 0 220 78" role="img" aria-label="${title}">`
+  return `<svg width="240" height="80" viewBox="0 0 240 80" role="img" aria-label="${title}">`
     + `<title>${title}</title>`
-    + `<g class="meta" style="color:var(--secondary-text-color)" stroke-width="1.6">`
+    + `<g style="color:var(--secondary-text-color)">`
     + inputSymbol(v.inputChar)
-    + `<line x1="38" y1="30" x2="58" y2="30" stroke="currentColor"/>`
-    + `<polygon points="58,26 64,30 58,34" fill="currentColor"/>`
+    + `<line x1="52" y1="34" x2="62" y2="34" stroke="currentColor" stroke-width="2"/>`
+    + `<polygon points="62,30 70,34 62,38" fill="currentColor"/>`
     + `</g>`
-    + `<rect x="64" y="10" width="92" height="40" rx="6" fill="none" stroke="var(--primary-color)"/>`
-    + `<text x="110" y="29" text-anchor="middle" font-size="11" fill="currentColor">${escXml(logicShort(v.logic))}</text>`
-    + `<text x="110" y="43" text-anchor="middle" font-size="9" fill="var(--secondary-text-color)">${sub}</text>`
-    + `<g stroke="currentColor" stroke-width="1.6"><line x1="156" y1="30" x2="170" y2="30"/>`
-    + `<polygon points="170,26 176,30 170,34" fill="currentColor"/></g>`
-    + `<g stroke="currentColor" stroke-width="1.6"><rect x="176" y="18" width="24" height="24" fill="none"/>`
-    + `<text x="188" y="34" text-anchor="middle" font-size="10" fill="currentColor" stroke="none">K</text></g>`
-    + `<line x1="200" y1="30" x2="204" y2="30" stroke="currentColor" stroke-width="1.6"/>`
-    + `<g stroke="currentColor" stroke-width="1.4"><circle cx="213" cy="30" r="9" fill="none"/>`
-    + `<line x1="207" y1="24" x2="219" y2="36"/><line x1="219" y1="24" x2="207" y2="36"/></g>`
-    + `<text x="20" y="70" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${inChar}</text>`
-    + `<text x="196" y="70" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${escXml(outIdent || "")}</text>`
+    + `<rect x="70" y="12" width="92" height="42" rx="8" fill="rgba(3,169,244,0.07)" stroke="var(--primary-color)" stroke-width="1.5"/>`
+    + `<text x="116" y="32" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">${escXml(logicShort(v.logic))}</text>`
+    + `<text x="116" y="46" text-anchor="middle" font-size="9" fill="var(--secondary-text-color)">${sub}</text>`
+    + `<g style="color:var(--secondary-text-color)"><line x1="162" y1="34" x2="172" y2="34" stroke="currentColor" stroke-width="2"/>`
+    + `<polygon points="172,30 180,34 172,38" fill="currentColor"/></g>`
+    + `<g><rect x="180" y="21" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"/>`
+    + `<text x="193" y="39" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">K</text></g>`
+    + `<line x1="206" y1="34" x2="210" y2="34" stroke="currentColor" stroke-width="2"/>`
+    + `<g stroke="currentColor" stroke-width="2"><circle cx="221" cy="34" r="10" fill="none"/>`
+    + `<line x1="215" y1="28" x2="227" y2="40" stroke-width="1.6"/><line x1="227" y1="28" x2="215" y2="40" stroke-width="1.6"/>`
+    + `<line x1="221" y1="19" x2="221" y2="22" stroke-width="1.6"/><line x1="221" y1="46" x2="221" y2="49" stroke-width="1.6"/>`
+    + `<line x1="233" y1="34" x2="236" y2="34" stroke-width="1.6"/></g>`
+    + `<text x="34" y="72" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${inChar}</text>`
+    + `<text x="200" y="72" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${escXml(outIdent || "")}</text>`
     + `</svg>`;
 }
 
