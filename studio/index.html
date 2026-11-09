@@ -122,14 +122,14 @@
     <option value="en">EN</option>
     <option value="de">DE</option>
   </select>
-  <button id="new" data-i18n="new">New rule</button>
-  <button id="reset" class="danger" data-i18n="reset">Reset</button>
+  <button id="new" data-i18n="new" disabled>New rule</button>
+  <button id="reset" class="danger" data-i18n="reset" disabled>Reset</button>
 </header>
 <main>
   <div class="groupLabel" data-i18n="liveState">Live device state</div>
   <div id="devstates" style="display:grid;gap:12px"></div>
   <div class="groupLabel" data-i18n="rulesTitle">On-device rules</div>
-  <div id="list"></div>
+  <div id="list"><div class="card"><div class="meta" data-i18n="waiting">Waiting for gateway…</div></div></div>
 </main>
 <p class="meta" style="max-width:980px;margin:0 auto;padding:0 20px 30px">
   <span data-i18n="footer"></span>

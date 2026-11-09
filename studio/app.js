@@ -49,6 +49,7 @@ const STRINGS = {
     logicTarget: "Target value",
     titleNew: "New rule",
     titleEdit: "Edit rule",
+    waiting: "Waiting for gateway…",
     fixBeforeSave: "Please fix before saving:",
     liveState: "Live device state",
     rulesTitle: "On-device rules",
@@ -128,6 +129,7 @@ const STRINGS = {
     logicTarget: "Zielwert",
     titleNew: "Neue Regel",
     titleEdit: "Regel bearbeiten",
+    waiting: "Warte auf Gateway…",
     liveState: "Live-Zustand der Geräte",
     rulesTitle: "Geräteregeln",
     fixBeforeSave: "Bitte vor dem Speichern beheben:",
@@ -425,6 +427,7 @@ async function refresh() {
   modeEl.textContent = status.mode || "mock";
   modeEl.classList.toggle("live", status.mode === "live");
   $("count").textContent = t("count")(rules.length);
+  for (const id of ["new", "reset"]) $(id).disabled = false;
   render();
 }
 
