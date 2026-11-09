@@ -7,14 +7,16 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOST, CONF_POP
+from .const import CONF_API_KEY, CONF_HOST, CONF_POP
 from .coordinator import EltakoConfigEntry
 from .entity import get_coordinator
 
 TO_REDACT = {
     CONF_POP,
     CONF_HOST,
+    CONF_API_KEY,
     "apiKey",
+    "api_key",
     "serial_number",
     "eur_id",
     "eurId",

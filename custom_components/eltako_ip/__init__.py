@@ -48,6 +48,7 @@ except ImportError:
     )
 
 from .const import (
+    CONF_API_KEY,
     CONF_HOST,
     CONF_POP,
     CONF_PORT,
@@ -133,9 +134,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: EltakoConfigEntry) -> bo
     )
 
     session = async_get_clientsession(hass, verify_ssl=False)
-    client = EltakoClient(host=host, port=port, pop=pop, session=session)
+    client = EltakoClient(
+        host=host,
+        port=port,
+        pop=pop,
+        session=session,
+        api_key=entry.data.get(CONF_API_KEY) or None,
+    )
     try:
-        await client.login()
+        # Reuse the stored apiKey when present; the first authenticated
+        # request re-logins transparently if it expired.
+        if not client.api_key:
+            await client.login()
         system_info = await client.get_system()
     except AuthenticationError as err:
         await client.close()
@@ -153,6 +163,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: EltakoConfigEntry) -> bo
     )
 
     await coordinator.async_config_entry_first_refresh()
+
+    # Persist a rotated/fresh apiKey so restarts reuse it instead of
+    # minting a new one (the device budgets ~10 keys).
+    if client.api_key and client.api_key != entry.data.get(CONF_API_KEY):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_API_KEY: client.api_key}
+        )
 
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

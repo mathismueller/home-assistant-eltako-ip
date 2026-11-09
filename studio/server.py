@@ -98,10 +98,10 @@ def load_fixture(name: str, default: list | dict):
 class GatewayProxy:
     """Minimal urllib-based proxy for live gateway access (stdlib only)."""
 
-    def __init__(self, host: str, port: int, pop: str) -> None:
+    def __init__(self, host: str, port: int, pop: str, api_key: str | None = None) -> None:
         self.base = f"https://{host}:{port}/api/v0"
         self.pop = pop
-        self.api_key: str | None = None
+        self.api_key = api_key
         self.ctx = ssl.create_default_context()
         self.ctx.check_hostname = False
         self.ctx.verify_mode = ssl.CERT_NONE
@@ -127,6 +127,11 @@ class GatewayProxy:
         except urllib.error.HTTPError as err:
             if err.code == 401 and self.pop:
                 self.login()
+                try:
+                    if self.api_key:
+                        persist_env_value("ELTAKO_API_KEY", self.api_key)
+                except OSError:
+                    pass
                 headers["Authorization"] = self.api_key or ""
                 req = urllib.request.Request(
                     f"{self.base}{path}", data=data, headers=headers, method=method
@@ -405,6 +410,20 @@ class Handler(SimpleHTTPRequestHandler):
         return self._send_json({"error": "not found"}, 404)
 
 
+def persist_env_value(key: str, value: str) -> None:
+    """Upsert a KEY=value line in the repo .env (preserves other lines)."""
+    path = REPO_ROOT / ".env"
+    lines = path.read_text().splitlines() if path.is_file() else []
+    entry = f"{key}={value}"
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{key}="):
+            lines[i] = entry
+            break
+    else:
+        lines.append(entry)
+    path.write_text("\n".join(lines) + "\n")
+
+
 def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(description="Eltako automation studio dev server")
@@ -425,8 +444,12 @@ def main() -> None:
     if args.live:
         if not args.host or not args.pop:
             parser.error("--live needs --host and --pop (or ELTAKO_HOST/ELTAKO_POP in .env)")
-        live = GatewayProxy(args.host, args.gateway_port, args.pop)
-        live.login()
+        stored_key = os.environ.get("ELTAKO_API_KEY", "").strip() or None
+        live = GatewayProxy(args.host, args.gateway_port, args.pop, api_key=stored_key)
+        if not live.api_key:
+            live.login()
+            if live.api_key and live.api_key != stored_key:
+                persist_env_value("ELTAKO_API_KEY", live.api_key)
         mode = "live"
 
     Handler.state = StudioState(live)

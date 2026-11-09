@@ -59,6 +59,7 @@ except ImportError:
     from aioeltako_ip.client import normalize_host  # type: ignore[no-redef]
 
 from .const import (
+    CONF_API_KEY,
     CONF_HOST,
     CONF_POP,
     CONF_PORT,
@@ -263,6 +264,7 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_HOST: host,
                         CONF_PORT: port,
                         CONF_POP: pop,
+                        CONF_API_KEY: client.api_key or "",
                     },
                 )
             finally:
@@ -310,6 +312,7 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
 
                 title = f"{system.product_name} ({system.serial_number})"
+                user_input[CONF_API_KEY] = client.api_key or ""
                 return self.async_create_entry(title=title, data=user_input)
             finally:
                 await client.close()
@@ -355,7 +358,7 @@ class EltakoConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_update_reload_and_abort(
                     reauth_entry,
-                    data_updates={CONF_POP: pop},
+                    data_updates={CONF_POP: pop, CONF_API_KEY: ""},
                 )
             finally:
                 await client.close()

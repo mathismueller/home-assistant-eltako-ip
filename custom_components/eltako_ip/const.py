@@ -7,6 +7,7 @@ DOMAIN: Final = "eltako_ip"
 CONF_HOST: Final = "host"
 CONF_PORT: Final = "port"
 CONF_POP: Final = "pop"
+CONF_API_KEY: Final = "api_key"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 
 DEFAULT_PORT: Final = 443
