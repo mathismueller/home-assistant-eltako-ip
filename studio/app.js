@@ -637,6 +637,78 @@ const TEMPLATES = [
 const picker = $("picker"), tmplList = $("tmplList"), tgtList = $("tgtList");
 let pickedTarget = null;
 
+/* --- Mini wiring diagrams (inline SVG, zero deps) -------------------------
+ * Schematic-style preview per template: input symbol ──► logic box ──►
+ * relay + lamp, with timer annotations. Generated from template values. */
+
+const escXml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;",
+}[c]));
+
+function inputSymbol(char) {
+  const c = char || "";
+  if (/contact|window/i.test(c)) {
+    // reed contact + magnet
+    return `<rect x="8" y="22" width="9" height="16" fill="none" stroke="currentColor"/>`
+      + `<rect x="27" y="18" width="5" height="24" fill="currentColor"/>`
+      + `<line x1="12.5" y1="38" x2="12.5" y2="44" stroke="currentColor"/><line x1="29.5" y1="42" x2="29.5" y2="48" stroke="currentColor"/>`;
+  }
+  if (/button/i.test(c)) {
+    // rocker with diagonal divider
+    return `<rect x="6" y="18" width="26" height="24" fill="none" stroke="currentColor"/>`
+      + `<line x1="8" y1="40" x2="30" y2="20" stroke="currentColor"/>`;
+  }
+  // pushbutton (NO): terminals + angled bridge
+  return `<line x1="10" y1="24" x2="10" y2="42" stroke="currentColor"/>`
+    + `<line x1="28" y1="24" x2="28" y2="42" stroke="currentColor"/>`
+    + `<line x1="10" y1="24" x2="26" y2="34" stroke="currentColor"/>`
+    + `<circle cx="28" cy="36" r="1.6" fill="currentColor"/>`;
+}
+
+function logicShort(value) {
+  const map = {
+    buttonImpulseSwitch: t("logicImpulseShort"),
+    buttonSwitch: t("logicSwitchShort"),
+    buttonNormallyOpened: t("logicNOShort"),
+    buttonNormallyClosed: t("logicNCShort"),
+    target: t("logicTargetShort"),
+    buttonTargetValue: t("logicTargetShort"),
+  };
+  return map[value] || value || "?";
+}
+
+function miniDiagram(v, outIdent, outClass) {
+  if (!v.logic) return "";
+  const parts = [];
+  if (v.off > 0) parts.push(`t=${v.off}s`);
+  if (v.long > 0) parts.push(`tL=${v.long}s`);
+  if (v.pre && v.off > 0) parts.push("+pre");
+  if (v.logic === "target" && v.target !== undefined) parts.push(`→${v.target}`);
+  const sub = escXml(parts.join("  "));
+  const inChar = escXml(v.inputChar || "");
+  const title = escXml(`${v.inputChar || "?"} → ${v.logic} → ${outIdent || outClass || "?"}`);
+  return `<svg width="220" height="78" viewBox="0 0 220 78" role="img" aria-label="${title}">`
+    + `<title>${title}</title>`
+    + `<g class="meta" style="color:var(--secondary-text-color)" stroke-width="1.6">`
+    + inputSymbol(v.inputChar)
+    + `<line x1="38" y1="30" x2="58" y2="30" stroke="currentColor"/>`
+    + `<polygon points="58,26 64,30 58,34" fill="currentColor"/>`
+    + `</g>`
+    + `<rect x="64" y="10" width="92" height="40" rx="6" fill="none" stroke="var(--primary-color)"/>`
+    + `<text x="110" y="29" text-anchor="middle" font-size="11" fill="currentColor">${escXml(logicShort(v.logic))}</text>`
+    + `<text x="110" y="43" text-anchor="middle" font-size="9" fill="var(--secondary-text-color)">${sub}</text>`
+    + `<g stroke="currentColor" stroke-width="1.6"><line x1="156" y1="30" x2="170" y2="30"/>`
+    + `<polygon points="170,26 176,30 170,34" fill="currentColor"/></g>`
+    + `<g stroke="currentColor" stroke-width="1.6"><rect x="176" y="18" width="24" height="24" fill="none"/>`
+    + `<text x="188" y="34" text-anchor="middle" font-size="10" fill="currentColor" stroke="none">K</text></g>`
+    + `<line x1="200" y1="30" x2="204" y2="30" stroke="currentColor" stroke-width="1.6"/>`
+    + `<g stroke="currentColor" stroke-width="1.4"><circle cx="213" cy="30" r="9" fill="none"/>`
+    + `<line x1="207" y1="24" x2="219" y2="36"/><line x1="219" y1="24" x2="207" y2="36"/></g>`
+    + `<text x="20" y="70" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${inChar}</text>`
+    + `<text x="196" y="70" text-anchor="middle" font-size="8" fill="var(--secondary-text-color)">${escXml(outIdent || "")}</text>`
+    + `</svg>`;
+}
+
 function templateApplies(tmpl, cls) {
   return !tmpl.classes || tmpl.classes.includes(cls);
 }
@@ -671,6 +743,18 @@ function renderTemplates() {
     const desc = document.createElement("small");
     desc.textContent = txt.desc;
     btn.append(name, desc);
+    try {
+      const preview = miniDiagram(
+        { ...tmpl.values(), suggest: tmpl.suggest },
+        pickedTarget?.identifier, pickedTarget?.deviceClass
+      );
+      if (preview) {
+        const holder = document.createElement("div");
+        holder.className = "meta";
+        holder.innerHTML = preview;
+        btn.append(holder);
+      }
+    } catch { /* preview is best-effort; picker works without it */ }
     btn.addEventListener("click", () => {
       picker.close();
       state.editing = null;
