@@ -42,6 +42,8 @@
     border: 1px solid var(--divider-color); color: var(--secondary-text-color);
   }
   .badge.live { color: var(--success-color); border-color: var(--success-color); }
+  .badge.pulse { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
   .spacer { flex: 1; }
   button, select, input {
     font: inherit; color: inherit;
@@ -66,6 +68,7 @@
   @media (prefers-reduced-motion: reduce) {
     button, .card { transition: none; }
     button:active { transform: none; }
+    .badge.pulse { animation: none; }
   }
   header select {
     background: transparent; border: 1px solid var(--divider-color);
@@ -116,8 +119,9 @@
 <body>
 <header>
   <h1>Eltako Automation Studio</h1>
-  <span id="mode" class="badge">mock</span>
-  <span id="count" class="badge">0 rules</span>
+  <span id="mode" class="badge">…</span>
+  <span id="count" class="badge">…</span>
+  <span id="wait" class="badge pulse" data-i18n="waiting">Waiting for gateway…</span>
   <span class="spacer"></span>
   <select id="lang" aria-label="Language / Sprache">
     <option value="en">EN</option>
@@ -130,7 +134,7 @@
   <div class="groupLabel" data-i18n="liveState">Live device state</div>
   <div id="devstates" style="display:grid;gap:12px"></div>
   <div class="groupLabel" data-i18n="rulesTitle">On-device rules</div>
-  <div id="list"><div class="card"><div class="meta" data-i18n="waiting">Waiting for gateway…</div></div></div>
+  <div id="list"></div>
 </main>
 <p class="meta" style="max-width:980px;margin:0 auto;padding:0 20px 30px">
   <span data-i18n="footer"></span>

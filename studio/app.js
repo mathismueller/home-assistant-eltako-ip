@@ -427,6 +427,7 @@ async function refresh() {
   modeEl.textContent = status.mode || "mock";
   modeEl.classList.toggle("live", status.mode === "live");
   $("count").textContent = t("count")(rules.length);
+  $("wait").hidden = true;
   for (const id of ["new", "reset"]) $(id).disabled = false;
   render();
 }
@@ -962,6 +963,7 @@ $("reset").addEventListener("click", async () => {
 
 applyI18n();
 refresh().catch((err) => {
+  $("wait").hidden = true;
   listEl.innerHTML = "";
   const div = document.createElement("div");
   div.className = "card";
