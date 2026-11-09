@@ -49,6 +49,8 @@ const STRINGS = {
     titleNew: "New rule",
     titleEdit: "Edit rule",
     fixBeforeSave: "Please fix before saving:",
+    liveState: "Live device state",
+    rulesTitle: "On-device rules",
     fDesc: "Name",
     hintDesc: "Stored on the device and shown in rule lists.",
     descPlaceholder: "e.g. Staircase hallway",
@@ -124,6 +126,8 @@ const STRINGS = {
     logicTarget: "Zielwert",
     titleNew: "Neue Regel",
     titleEdit: "Regel bearbeiten",
+    liveState: "Live-Zustand der Geräte",
+    rulesTitle: "Geräteregeln",
     fixBeforeSave: "Bitte vor dem Speichern beheben:",
     fDesc: "Name",
     hintDesc: "Wird im Gerät gespeichert und in Regellisten angezeigt.",
@@ -303,6 +307,47 @@ function addonPills(rule) {
   return pills;
 }
 
+function errorText(rule) {
+  return (rule.errors || []).map((e) => [e.code, e.title || e.description].filter(Boolean).join(" ")).join("; ");
+}
+
+function renderDevices() {
+  const box = $("devstates");
+  box.innerHTML = "";
+  for (const dev of state.devices) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const name = document.createElement("div");
+    name.style.fontWeight = "600";
+    name.textContent = dev.displayName || dev.deviceGuid.slice(0, 8);
+    const flow = document.createElement("div");
+    flow.className = "flow";
+    const chars = [...(dev.functions || []), ...(dev.infos || [])];
+    if (!chars.length) {
+      const none = document.createElement("span");
+      none.className = "meta";
+      none.textContent = "—";
+      flow.appendChild(none);
+    }
+    for (const ch of chars) {
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.textContent = `${ch.identifier}: ${ch.value}`;
+      flow.appendChild(pill);
+    }
+    const eo = state.enocean.find((x) => x.deviceGuid === dev.deviceGuid);
+    if (eo && eo.signalStrength !== undefined && eo.signalStrength !== null) {
+      const rssi = document.createElement("span");
+      rssi.className = "pill";
+      rssi.textContent = `RSSI ${eo.signalStrength} dBm`;
+      rssi.title = eo.lastSeen ? `last seen ${eo.lastSeen}` : "";
+      flow.appendChild(rssi);
+    }
+    card.append(name, flow);
+    box.appendChild(card);
+  }
+}
+
 function isTemplateRule(rule) {
   const desc = rule.description || "";
   if (typeof TEMPLATES !== "undefined" && TEMPLATES.some((tmpl) =>
@@ -351,6 +396,7 @@ async function refresh() {
 }
 
 function render() {
+  renderDevices();
   listEl.innerHTML = "";
   if (!state.rules.length) {
     const div = document.createElement("div");
@@ -367,7 +413,7 @@ function render() {
     const card = document.createElement("div");
     card.className = "card";
     const health = rule.operatingStatus && rule.operatingStatus !== "success"
-      ? `<span class="pill warn">${rule.operatingStatus}</span>` : "";
+      ? `<span class="pill warn" title="${escXml(errorText(rule))}">${rule.operatingStatus}</span>` : "";
     const flow = document.createElement("div");
     flow.className = "flow";
     const title = document.createElement("div");
