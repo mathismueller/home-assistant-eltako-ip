@@ -36,6 +36,7 @@ import json
 import os
 import ssl
 import sys
+import threading
 import urllib.request
 import urllib.error
 import uuid
@@ -104,8 +105,14 @@ class GatewayProxy:
         self.ctx = ssl.create_default_context()
         self.ctx.check_hostname = False
         self.ctx.verify_mode = ssl.CERT_NONE
+        # Firmware drops concurrent connections; serialize all access.
+        self._lock = threading.Lock()
 
     def _call(self, method: str, path: str, body: dict | list | None = None):
+        with self._lock:
+            return self._call_locked(method, path, body)
+
+    def _call_locked(self, method: str, path: str, body: dict | list | None = None):
         data = json.dumps(body).encode() if body is not None else None
         headers = {"Content-Type": "application/json"}
         if self.api_key:

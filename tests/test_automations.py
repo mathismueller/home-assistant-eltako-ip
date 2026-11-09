@@ -235,6 +235,32 @@ def test_esr_target_value_range_enforced():
 
 
 @pytest.mark.asyncio
+async def test_concurrent_requests_do_not_deadlock(
+    test_base_url: str, test_host: str, test_pop: str
+):
+    """Concurrent requests must serialize (firmware drops parallel ones)."""
+    import asyncio
+
+    login_data = load_fixture("login")
+    automations_data = load_fixture("automations")
+    with aioresponses() as m:
+        m.post(f"{test_base_url}/login", payload=login_data)
+        m.get(
+            f"{test_base_url}/services/eltako/automations",
+            payload=automations_data,
+            repeat=True,
+        )
+        async with EltakoClient(test_host, pop=test_pop) as client:
+            results = await asyncio.wait_for(
+                asyncio.gather(
+                    *[client.get_automations() for _ in range(5)]
+                ),
+                timeout=10,
+            )
+            assert all(len(r) == 1 for r in results)
+
+
+@pytest.mark.asyncio
 async def test_create_rejects_invalid_rule_before_http(
     test_host: str, test_pop: str
 ):

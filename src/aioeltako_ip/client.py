@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import logging
@@ -84,6 +85,8 @@ class EltakoClient:
         self._timeout = timeout
         self._external_session = session is not None
         self._session = session
+        # Firmware drops concurrent connections; serialize all requests.
+        self._request_lock = asyncio.Lock()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -138,6 +141,22 @@ class EltakoClient:
         return self.api_key
 
     async def _request(
+        self,
+        method: str,
+        path: str,
+        retry_auth: bool = True,
+        use_root: bool = False,
+        require_auth: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute authenticated HTTP request with automatic token refresh."""
+        async with self._request_lock:
+            return await self._request_locked(
+                method, path, retry_auth=retry_auth, use_root=use_root,
+                require_auth=require_auth, **kwargs,
+            )
+
+    async def _request_locked(
         self,
         method: str,
         path: str,
