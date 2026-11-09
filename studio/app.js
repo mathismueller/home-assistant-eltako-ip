@@ -47,6 +47,9 @@ const STRINGS = {
     titleNew: "New rule",
     titleEdit: "Edit rule",
     fixBeforeSave: "Please fix before saving:",
+    fDesc: "Name",
+    hintDesc: "Stored on the device and shown in rule lists.",
+    descPlaceholder: "e.g. Staircase hallway",
     hintInputChar: "Only characteristics this input actually reports.",
     eudNote: "Dimmer rules are read-only in this studio version — saving would wipe the dimmer ramp configuration.",
     confirmDelete: "Delete this on-device rule?",
@@ -118,6 +121,9 @@ const STRINGS = {
     titleNew: "Neue Regel",
     titleEdit: "Regel bearbeiten",
     fixBeforeSave: "Bitte vor dem Speichern beheben:",
+    fDesc: "Name",
+    hintDesc: "Wird im Gerät gespeichert und in Regellisten angezeigt.",
+    descPlaceholder: "z. B. Treppenlicht Flur",
     hintInputChar: "Nur Merkmale, die dieser Eingang tatsächlich meldet.",
     eudNote: "Dimmregeln sind in dieser Version schreibgeschützt – Speichern würde die Rampen-Konfiguration löschen.",
     confirmDelete: "Diese Geräteregel löschen?",
@@ -294,7 +300,10 @@ function addonPills(rule) {
 
 function isTemplateRule(rule) {
   const desc = rule.description || "";
-  if (typeof TEMPLATES !== "undefined" && TEMPLATES.some((tmpl) => tmpl.description && desc === tmpl.description)) return true;
+  if (typeof TEMPLATES !== "undefined" && TEMPLATES.some((tmpl) =>
+    (tmpl.description && desc === tmpl.description)
+    || (tmpl.suggest && (desc === tmpl.suggest.en || desc === tmpl.suggest.de))
+  )) return true;
   return /staircase|treppen|prewarning|vorwarnung/i.test(desc);
 }
 
@@ -356,6 +365,10 @@ function render() {
       ? `<span class="pill warn">${rule.operatingStatus}</span>` : "";
     const flow = document.createElement("div");
     flow.className = "flow";
+    const title = document.createElement("div");
+    title.style.fontWeight = "600";
+    title.textContent = rule.description || cfg.automationGuid;
+    title.title = cfg.automationGuid;
     const tmplPill = isTemplateRule(rule)
       ? `<span class="pill logic" title="${t("presetTitle")}">${t("tmpl")}</span>` : "";
     const pillsHtml = addonPills(rule).map((p) => `<span class="pill" title="${p.title}">${p.text}</span>`).join("");
@@ -400,7 +413,7 @@ function render() {
       await refresh();
     });
     row.append(meta, spacer, checkLabel, editBtn, delBtn);
-    card.append(flow, row);
+    card.append(title, flow, row);
     listEl.appendChild(card);
   }
 }
@@ -416,6 +429,7 @@ function fillDeviceSelects() {
 function ruleToForm(rule) {
   const cfg = rule.configuration;
   const get = (t2) => (cfg.addOns || []).find((a) => a.type === t2);
+  $("fDesc").value = rule.description || "";
   setSelect($("fInput"), cfg.inputDeviceGuid);
   syncInputChars(cfg.inputCharacteristicIdentifier);
   setSelect($("fOutput"), cfg.outputDeviceGuid);
@@ -436,8 +450,8 @@ function formToPayload() {
   if ($("fPre").checked && off > 0) addOns.push({ type: "prewarning", time: null, data: null });
   if ($("fLogic").value === "target") addOns.push({ type: "targetValue", time: null, data: Number($("fTarget").value || 100) });
   const base = state.editing?.configuration || {};
-  const description = state.editing?.description || state.pendingDescription || "studio";
-  state.pendingDescription = null;
+  const descField = $("fDesc").value.trim();
+  const description = descField || state.editing?.description || "studio";
   return {
     enabled: $("fActive").checked,
     description,
@@ -461,12 +475,14 @@ function openEditor(rule) {
   fillDeviceSelects();
   $("editorTitle").textContent = rule ? t("titleEdit") : t("titleNew");
   $("fErr").textContent = "";
+  $("fDesc").placeholder = t("descPlaceholder");
   if (rule) ruleToForm(rule);
+  else $("fDesc").value = "";
   editor.showModal();
 }
 
 function prefillForm(v) {
-  if (v.inputGuid) setSelect($("fInput"), v.inputGuid);
+  $("fDesc").value = v.suggest?.[lang] || v.suggest?.en || "";  if (v.inputGuid) setSelect($("fInput"), v.inputGuid);
   syncInputChars(v.inputChar);
   if (v.outputGuid) setSelect($("fOutput"), v.outputGuid);
   syncOutput(undefined, v.logic);
@@ -519,6 +535,7 @@ const TEMPLATES = [
     en: { name: "Template: Staircase + prewarning", desc: "Treppenlicht: on with short press, auto-off after 10s, 3× flicker warning." },
     de: { name: "Vorlage: Treppenlicht + Vorwarnung", desc: "Bei Kurzdruck ein, nach 10s automatisch aus, 3× Flackern als Warnung." },
     description: "staircase+prewarning",
+    suggest: { en: "Staircase + prewarning", de: "Treppenlicht + Vorwarnung" },
     values: () => {
       const w = wiredTrigger();
       return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 10, long: 0, pre: true };
@@ -529,6 +546,7 @@ const TEMPLATES = [
     en: { name: "Template: Pushbutton toggle", desc: "Taster: each press toggles the relay, no timer." },
     de: { name: "Vorlage: Taster-Umschaltung", desc: "Jeder Tastendruck schaltet das Relais um, ohne Timer." },
     description: "pushbutton-toggle",
+    suggest: { en: "Pushbutton toggle", de: "Taster-Umschaltung" },
     values: () => {
       const w = wiredTrigger();
       return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false };
@@ -539,6 +557,7 @@ const TEMPLATES = [
     en: { name: "Template: Rocker switch", desc: "Kippschalter: output follows press and release." },
     de: { name: "Vorlage: Kippschalter", desc: "Der Ausgang folgt Druck und Loslassen der Wippe." },
     description: "rocker-switch",
+    suggest: { en: "Rocker switch", de: "Kippschalter" },
     values: () => {
       const w = wiredTrigger();
       return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false };
@@ -549,6 +568,7 @@ const TEMPLATES = [
     en: { name: "Template: Long-press timer", desc: "Short press toggles, long press starts a 60s auto-off timer." },
     de: { name: "Vorlage: Langdruck-Timer", desc: "Kurzdruck schaltet um, Langdruck startet 60s-Timer." },
     description: "longpress-timer",
+    suggest: { en: "Long-press timer", de: "Langdruck-Timer" },
     values: () => {
       const w = wiredTrigger();
       return { inputGuid: w?.deviceGuid, inputChar: w?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 60, pre: false };
@@ -559,6 +579,7 @@ const TEMPLATES = [
     en: { name: "Template: Window contact", desc: "FTK contact drives the relay (follows open/close)." },
     de: { name: "Vorlage: Fensterkontakt", desc: "FTK-Kontakt steuert das Relais (folgt Auf/Zu)." },
     description: "window-contact",
+    suggest: { en: "Window contact", de: "Fensterkontakt" },
     values: () => {
       const c = contactTrigger() || wiredTrigger();
       return { inputGuid: c?.deviceGuid, inputChar: c?.identifier || "contact", outputGuid: relayTarget()?.deviceGuid, logic: "buttonSwitch", off: 0, long: 0, pre: false };
@@ -569,6 +590,7 @@ const TEMPLATES = [
     en: { name: "Template: EnOcean rocker", desc: "Paired wireless rocker toggles the relay." },
     de: { name: "Vorlage: EnOcean-Wippe", desc: "Gekoppelte Funkwippe schaltet das Relais." },
     description: "enocean-rocker",
+    suggest: { en: "EnOcean rocker", de: "EnOcean-Wippe" },
     values: () => {
       const b = buttonTrigger();
       return { inputGuid: b?.deviceGuid, inputChar: b?.identifier || "input", outputGuid: relayTarget()?.deviceGuid, logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false };
@@ -593,9 +615,8 @@ function openPicker() {
     btn.addEventListener("click", () => {
       picker.close();
       state.editing = null;
-      state.pendingDescription = tmpl.description || "studio";
       openEditor(null);
-      prefillForm(tmpl.values());
+      prefillForm({ ...tmpl.values(), suggest: tmpl.suggest });
     });
     tmplList.appendChild(btn);
   }

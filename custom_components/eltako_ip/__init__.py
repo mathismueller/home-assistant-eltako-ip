@@ -340,6 +340,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         rule = AutomationRule(
             automation_guid="",
             active=call.data.get("active", True),
+            description=call.data.get("description", ""),
             input_device_guid=call.data["input_device_guid"],
             input_characteristic_identifier=call.data.get(
                 "input_characteristic", "input"
@@ -371,6 +372,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
         logic = call.data.get("logic", existing.logic)
         active = call.data.get("active", existing.active)
+        description = call.data.get("description", existing.description)
         off_timer_sec = call.data.get("off_timer_seconds")
         off_timer_ms = (
             int(float(off_timer_sec) * 1000)
@@ -382,6 +384,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             logic=logic,
             off_timer_ms=off_timer_ms,
             active=active,
+            description=description,
         )
         await coord.async_request_refresh()
 
@@ -526,6 +529,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional("entry_id"): cv.string,
                 vol.Required("input_device_guid"): cv.string,
+                vol.Optional("description", default=""): cv.string,
                 vol.Optional("input_characteristic", default="input"): cv.string,
                 vol.Required("output_device_guid"): cv.string,
                 vol.Optional("output_characteristic", default="relay"): cv.string,
@@ -543,6 +547,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional("entry_id"): cv.string,
                 vol.Required("automation_guid"): cv.string,
+                vol.Optional("description"): cv.string,
                 vol.Optional("logic"): cv.string,
                 vol.Optional("off_timer_seconds"): vol.Coerce(float),
                 vol.Optional("active"): cv.boolean,

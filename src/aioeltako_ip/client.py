@@ -811,6 +811,7 @@ class EltakoClient:
         logic: str,
         off_timer_ms: Optional[int] = None,
         active: Optional[bool] = None,
+        description: Optional[str] = None,
     ) -> bool:
         """Update the logic (e.g. buttonImpulseSwitch vs buttonSwitch) and optional offTimer of a rule."""
         new_addons: list[AutomationAddOn] = [
@@ -834,7 +835,7 @@ class EltakoClient:
         updated = AutomationRule(
             automation_guid=rule.automation_guid,
             enabled=rule.enabled if active is None else bool(active),
-            description=rule.description,
+            description=rule.description if description is None else description,
             logic=logic,
             input_device_guid=rule.input_device_guid,
             input_characteristic_identifier=rule.input_characteristic_identifier,

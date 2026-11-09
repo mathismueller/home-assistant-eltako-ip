@@ -298,6 +298,7 @@ class EltakoAutomationsCountSensor(EltakoGatewayEntity, SensorEntity):
             "rules": [
                 {
                     "automation_guid": r.automation_guid,
+                    "description": r.description,
                     "active": r.active,
                     "logic": r.logic,
                     "input_device_guid": r.input_device_guid,

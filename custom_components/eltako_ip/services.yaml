@@ -190,6 +190,13 @@ create_automation:
   name: Create On-Device Automation
   description: Creates an autonomous hardware-level automation rule on the Eltako device (executes even if Wi-Fi/HA is offline).
   fields:
+    description:
+      name: Name
+      description: Human-readable name stored persistently on the device.
+      required: false
+      default: ""
+      selector:
+        text:
     input_device_guid:
       name: Input Device GUID
       description: GUID of the input trigger device (e.g. wired input or EnOcean sensor/rocker).
@@ -252,12 +259,18 @@ create_automation:
 
 update_automation:
   name: Update On-Device Automation
-  description: Updates logic, off-timer, or active state of an existing on-device automation rule.
+  description: Updates name, logic, off-timer, or active state of an existing on-device automation rule.
   fields:
     automation_guid:
       name: Automation GUID
       description: The automationGuid of the rule to update.
       required: true
+      selector:
+        text:
+    description:
+      name: Name
+      description: Human-readable name stored persistently on the device.
+      required: false
       selector:
         text:
     logic:
