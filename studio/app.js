@@ -614,7 +614,7 @@ const TEMPLATES = [
     id: "blank",
     en: { name: "Blank rule", desc: "Start from scratch with default values." },
     de: { name: "Leere Regel", desc: "Mit Standardwerten neu beginnen." },
-    values: () => ({}),
+    values: () => ({ logic: "buttonImpulseSwitch", off: 0, long: 0, pre: false, target: 100, active: true }),
   },
   {
     id: "staircase",
