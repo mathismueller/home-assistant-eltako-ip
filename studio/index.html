@@ -51,6 +51,20 @@
   }
   button.primary { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
   button.danger { color: var(--error-color); border-color: var(--error-color); }
+  button { transition: background-color .12s ease, border-color .12s ease, transform .06s ease, box-shadow .12s ease; }
+  button:hover { border-color: var(--primary-color); }
+  button.primary:hover { filter: brightness(1.07); }
+  button.danger:hover { background: rgba(219,68,55,.08); }
+  button:active { transform: scale(.98); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  #tmplList button:hover, #tgtList button:hover { box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+  #tgtList button.selected:hover { border-color: var(--primary-color); }
+  .card { transition: border-color .12s ease; }
+  .card:hover { border-color: var(--secondary-text-color); }
+  @media (prefers-reduced-motion: reduce) {
+    button, .card { transition: none; }
+    button:active { transform: none; }
+  }
   header select {
     background: transparent; border: 1px solid var(--divider-color);
     border-radius: 8px; padding: 7px 10px;
