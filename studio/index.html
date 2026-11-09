@@ -87,6 +87,9 @@
   #tmplList button { text-align: left; display: grid; gap: 2px; padding: 10px 12px; }
   #tmplList button strong { font-size: 14px; }
   #tmplList button small { font-size: 12px; color: var(--secondary-text-color); }
+  #tgtList { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  #tgtList button.selected { border-color: var(--primary-color); color: var(--primary-color); }
+  .groupLabel { font-size: 12px; color: var(--secondary-text-color); margin: 8px 0 4px; }
   .check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
   .check small { flex-basis: 100%; }
   .err { color: var(--error-color); font-size: 13px; min-height: 1em; }
@@ -115,6 +118,9 @@
 
 <dialog id="picker">
   <h3 id="pickerTitle" style="margin:0 0 8px" data-i18n="pickerTitle">Choose a template</h3>
+  <div class="groupLabel" data-i18n="pickerTarget">Target device</div>
+  <div id="tgtList"></div>
+  <div class="groupLabel" data-i18n="pickerTemplate">Template</div>
   <div id="tmplList" style="display:grid;gap:8px"></div>
   <div class="row" style="margin-top:12px">
     <span class="spacer"></span>

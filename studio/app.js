@@ -20,7 +20,9 @@ const STRINGS = {
     infoStaircase: "Staircase + prewarning (Treppenlicht): a short press switches the relay on and it turns off automatically after the off-timer. With prewarning the relay flickers 3× starting 30s before expiry so you can press again. Runs entirely on-device — works even if Wi-Fi / Home Assistant is down.",
     infoTarget: "Target logic: moves the output to a fixed targetValue (0–100) instead of toggling. Without a target the device toggles between min/max. Use it for scenes, e.g. always switch on to 100%.",
     footer: "Standalone dev harness. Same JSON contract as the future HA WebSocket API.",
-    pickerTitle: "Choose a template",    fInput: "Input device",
+    pickerTitle: "Choose a template",
+    pickerTarget: "Target device",
+    pickerTemplate: "Template",    fInput: "Input device",
     fInputChar: "Input characteristic",
     fOutput: "Output actuator",
     fOutputChar: "Output characteristic",
@@ -94,6 +96,8 @@ const STRINGS = {
     infoTarget: "Target-Logik: fährt den Ausgang auf einen festen Zielwert (targetValue 0–100) statt umzuschalten. Ohne Zielwert schaltet das Gerät zwischen Min/Max um. Z. B. für Szenen: immer auf 100% einschalten.",
     footer: "Eigenständige Dev-Oberfläche. Gleiches JSON-Format wie die spätere HA-WebSocket-API.",
     pickerTitle: "Vorlage wählen",
+    pickerTarget: "Zielgerät",
+    pickerTemplate: "Vorlage",
     fInput: "Eingang (Taster/Kontakt)",
     fInputChar: "Eingangsmerkmal",
     fOutput: "Aktor (Ausgang)",
@@ -483,10 +487,11 @@ function openEditor(rule) {
 }
 
 function prefillForm(v) {
-  $("fDesc").value = v.suggest?.[lang] || v.suggest?.en || "";  if (v.inputGuid) setSelect($("fInput"), v.inputGuid);
+  $("fDesc").value = v.suggest?.[lang] || v.suggest?.en || "";
+  if (v.inputGuid) setSelect($("fInput"), v.inputGuid);
   syncInputChars(v.inputChar);
   if (v.outputGuid) setSelect($("fOutput"), v.outputGuid);
-  syncOutput(undefined, v.logic);
+  syncOutput(v.outputChar, v.logic);
   if (v.inputChar) setSelect($("fInputChar"), v.inputChar);
   if (v.logic) setSelect($("fLogic"), v.logic);
   updateAddonVisibility();
@@ -536,6 +541,7 @@ const TEMPLATES = [
     en: { name: "Template: Staircase + prewarning", desc: "Treppenlicht: on with short press, auto-off after 10s, 3× flicker warning." },
     de: { name: "Vorlage: Treppenlicht + Vorwarnung", desc: "Bei Kurzdruck ein, nach 10s automatisch aus, 3× Flackern als Warnung." },
     description: "staircase+prewarning",
+    classes: ["ESR"],
     suggest: { en: "Staircase + prewarning", de: "Treppenlicht + Vorwarnung" },
     values: () => {
       const w = wiredTrigger();
@@ -547,6 +553,7 @@ const TEMPLATES = [
     en: { name: "Template: Pushbutton toggle", desc: "Taster: each press toggles the relay, no timer." },
     de: { name: "Vorlage: Taster-Umschaltung", desc: "Jeder Tastendruck schaltet das Relais um, ohne Timer." },
     description: "pushbutton-toggle",
+    classes: ["ESR"],
     suggest: { en: "Pushbutton toggle", de: "Taster-Umschaltung" },
     values: () => {
       const w = wiredTrigger();
@@ -558,6 +565,7 @@ const TEMPLATES = [
     en: { name: "Template: Rocker switch", desc: "Kippschalter: output follows press and release." },
     de: { name: "Vorlage: Kippschalter", desc: "Der Ausgang folgt Druck und Loslassen der Wippe." },
     description: "rocker-switch",
+    classes: ["ESR"],
     suggest: { en: "Rocker switch", de: "Kippschalter" },
     values: () => {
       const w = wiredTrigger();
@@ -569,6 +577,7 @@ const TEMPLATES = [
     en: { name: "Template: Long-press timer", desc: "Short press toggles, long press starts a 60s auto-off timer." },
     de: { name: "Vorlage: Langdruck-Timer", desc: "Kurzdruck schaltet um, Langdruck startet 60s-Timer." },
     description: "longpress-timer",
+    classes: ["ESR"],
     suggest: { en: "Long-press timer", de: "Langdruck-Timer" },
     values: () => {
       const w = wiredTrigger();
@@ -580,6 +589,7 @@ const TEMPLATES = [
     en: { name: "Template: Always on", desc: "Press always switches the relay on (manufacturer pattern, targetValue 1)." },
     de: { name: "Vorlage: Immer ein", desc: "Druck schaltet das Relais immer ein (Herstellermuster, targetValue 1)." },
     description: "always-on",
+    classes: ["ESR"],
     suggest: { en: "Always on", de: "Immer ein" },
     values: () => {
       const w = wiredTrigger();
@@ -591,6 +601,7 @@ const TEMPLATES = [
     en: { name: "Template: Always off", desc: "Press always switches the relay off (manufacturer pattern, targetValue 0)." },
     de: { name: "Vorlage: Immer aus", desc: "Druck schaltet das Relais immer aus (Herstellermuster, targetValue 0)." },
     description: "always-off",
+    classes: ["ESR"],
     suggest: { en: "Always off", de: "Immer aus" },
     values: () => {
       const w = wiredTrigger();
@@ -602,6 +613,7 @@ const TEMPLATES = [
     en: { name: "Template: Window contact", desc: "FTK contact drives the relay (follows open/close)." },
     de: { name: "Vorlage: Fensterkontakt", desc: "FTK-Kontakt steuert das Relais (folgt Auf/Zu)." },
     description: "window-contact",
+    classes: ["ESR"],
     suggest: { en: "Window contact", de: "Fensterkontakt" },
     values: () => {
       const c = contactTrigger() || wiredTrigger();
@@ -613,6 +625,7 @@ const TEMPLATES = [
     en: { name: "Template: EnOcean rocker", desc: "Paired wireless rocker toggles the relay." },
     de: { name: "Vorlage: EnOcean-Wippe", desc: "Gekoppelte Funkwippe schaltet das Relais." },
     description: "enocean-rocker",
+    classes: ["ESR"],
     suggest: { en: "EnOcean rocker", de: "EnOcean-Wippe" },
     values: () => {
       const b = buttonTrigger();
@@ -621,13 +634,36 @@ const TEMPLATES = [
   },
 ];
 
-const picker = $("picker"), tmplList = $("tmplList");
+const picker = $("picker"), tmplList = $("tmplList"), tgtList = $("tgtList");
+let pickedTarget = null;
 
-function openPicker() {
-  if (!triggerDevices().length || !targetDevices().length) { alert(t("noDevices")); return; }
-  fillDeviceSelects();
+function templateApplies(tmpl, cls) {
+  return !tmpl.classes || tmpl.classes.includes(cls);
+}
+
+function renderTargets() {
+  tgtList.innerHTML = "";
+  const targets = state.caps?.targets || [];
+  for (const tgt of targets) {
+    const btn = document.createElement("button");
+    btn.textContent = `${tgt.displayName} · ${tgt.identifier} (${tgt.deviceClass})`;
+    btn.title = tgt.deviceGuid;
+    if (pickedTarget && pickedTarget.deviceGuid === tgt.deviceGuid && pickedTarget.identifier === tgt.identifier) {
+      btn.classList.add("selected");
+    }
+    btn.addEventListener("click", () => {
+      pickedTarget = tgt;
+      renderTargets();
+      renderTemplates();
+    });
+    tgtList.appendChild(btn);
+  }
+}
+
+function renderTemplates() {
   tmplList.innerHTML = "";
-  for (const tmpl of TEMPLATES) {
+  const cls = pickedTarget?.deviceClass || "ESR";
+  for (const tmpl of TEMPLATES.filter((x) => templateApplies(x, cls))) {
     const txt = tmpl[lang] || tmpl.en;
     const btn = document.createElement("button");
     const name = document.createElement("strong");
@@ -639,10 +675,26 @@ function openPicker() {
       picker.close();
       state.editing = null;
       openEditor(null);
-      prefillForm({ ...tmpl.values(), suggest: tmpl.suggest });
+      const v = tmpl.values();
+      if (pickedTarget) {
+        v.outputGuid = pickedTarget.deviceGuid;
+        v.outputChar = pickedTarget.identifier;
+      }
+      prefillForm({ ...v, suggest: tmpl.suggest });
     });
     tmplList.appendChild(btn);
   }
+}
+
+function openPicker() {
+  const targets = state.caps?.targets || [];
+  if (!triggerDevices().length || !targets.length) { alert(t("noDevices")); return; }
+  fillDeviceSelects();
+  if (!pickedTarget || !targets.some((x) => x.deviceGuid === pickedTarget.deviceGuid && x.identifier === pickedTarget.identifier)) {
+    pickedTarget = targets[0];
+  }
+  renderTargets();
+  renderTemplates();
   picker.showModal();
 }
 
